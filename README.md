@@ -47,6 +47,8 @@ and then move the ProteinMPNN directory to somewhere (eg. /opt/tools/ProteinMPNN
 
 https://www.rosettacommons.org
 
+It is required to compile mpi version of rosetta
+
 <br>
 
 ### 2. Template preparation
