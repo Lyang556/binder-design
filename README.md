@@ -32,20 +32,24 @@ conda create -n binderdesign python=3.7.0
 conda install -c pytorch pytorch=1.11.0
 conda install -c anaconda numpy pandas python-dateutil
 conda install -c schrodinger pymol
-
 ```
 
 #### ProteinMPNN
 
 ```
 git clone https://github.com/dauparas/ProteinMPNN
-
 ```
 
 and then move the ProteinMPNN directory to somewhere (eg. /opt/tools/ProteinMPNN/)
 
 
-### 1. Template preparation
+#### Rosetta
+
+https://www.rosettacommons.org
+
+<br>
+
+### 2. Template preparation
 
 'Template' is a PDB file containing a target and a binder. 
 
@@ -55,13 +59,13 @@ In the template PDB file, binder should be set to chain A and target to chain B,
 
 <br>
 
-### 2. Binder library
+### 3. Binder library
 
 You can find the library of miniproteins (binders) in the supplementary data of *Cao_2022_Nature* paper.
 
 <br>
 
-### 3. Working directory setting
+### 4. Working directory setting
 
 ```
 
