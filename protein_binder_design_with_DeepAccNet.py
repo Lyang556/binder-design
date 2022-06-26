@@ -8,7 +8,7 @@ import argparse
 
 import time
 
-# from pymol import cmd
+from pymol import cmd
 import pandas as pd
 import numpy as np
 
@@ -41,15 +41,16 @@ parser.add_argument('--nstruct', required=False, type=int, default=3, help='nstr
 
 parser.add_argument('--score', required=False, type=str, default='./final_score.txt', help='Scorefile to be converted to csv format')
 parser.add_argument('--csvname', required=False, type=str, default='./final_score.csv', help='Name of converted csv file')
-parser.add_argument('--dist', required=False, type=str, default='./09_results_pdb', help='directory to final results')
+parser.add_argument('--dist', required=False, type=str, default='./10_results_pdb', help='directory to final results')
 parser.add_argument('--postsele', required=False, type=str, default='false', help='')
 
 
 # test
 parser.add_argument('--danpath', required=False, type=str, default='/opt/programs/DeepAccNet/', help='Path to DeepAccNet')
 parser.add_argument('--danconda', required=False, type=str, default='dan', help='Name of conda env for DeepAccNet')
-parser.add_argument('--danresult', required=False, type=str, default='./DAN_results.csv', help='Name of result csv file of DeepAccNet')
-parser.add_argument('--sorting', required=False, type=str, default='plddt', help='Sort by ...')
+parser.add_argument('--danresult', required=False, type=str, default='./09_DAN/DAN_results.csv', help='Name of result csv file of DeepAccNet')
+parser.add_argument('--dandir', required=False, type=str, default='./09_DAN', help='saving path to binder files for DeepAccNet')
+parser.add_argument('--sorting', required=False, type=str, default='score', help='Sort by ...')
 
 
 args = parser.parse_args()
@@ -366,16 +367,31 @@ def minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=arg
 
 
 
-def dan (minimdir=args.minimdir, danpath=args.danpath, num_core=args.np, danconda=args.danconda):
+def dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda):
+
+    list_path = os.listdir(f'./{minimdir}/')
+    pdb_list = [file for file in list_path if file.endswith('.pdb')]
+
+    dandir = dandir.replace('\n', '')
+    dandir = dandir.replace('./', '')
+ 
+    if dandir in os.listdir('./'):
+        pass
+    else:
+        os.mkdir(dandir)
+
+      
+    for i in pdb_list:
+        binder = 'binder'
+        cmd.load(f'./{minimdir}/{i}')
+        cmd.create(binder, 'chain A')
+        cmd.save(f'./{dandir}/{i}', f'{binder}')
+        j = i.replace('.pdb','')
+        cmd.remove(j)
+        cmd.remove(binder)
 
     resultname = 'DAN_results.orig.csv'
     resultname_mod = 'DAN_results.csv'
-
-    if resultname in os.listdir('./'):
-        print(f'**-----Please remove the {resultname} file-----**')
-        exit()
-    else:
-        pass
 
     if num_core == 'all':
         print('Please verify num_cores for process')
@@ -387,13 +403,17 @@ def dan (minimdir=args.minimdir, danpath=args.danpath, num_core=args.np, dancond
     print ('-----------------------------')
     print ('DeepAccNet running ...')
     
-    os.system(f'conda run -n {danconda} python3 {danpath}/DeepAccNet.py -r -v --csv --process {num_core} {minimdir} {resultname} > DAN_log.log')
+    os.system(f'conda run -n {danconda} python3 {danpath}/DeepAccNet.py -r -v -pr --csv --process {num_core} {dandir} ./{dandir}/{resultname} > ./{dandir}/DAN_log.log')
 
-    df = pd.read_csv(resultname, delimiter=r'\s+')
+    df = pd.read_csv(f'./{dandir}/{resultname}', delimiter=r'\s+')
 
     df.columns = ['description', 'plddt']
 
-    pd.DataFrame(df).sort_values(by=['plddt'], ascending=False).to_csv(resultname_mod).reset_index(drop=True)
+    # df_load = pd.DataFrame(df).sort_values(by=['plddt'], ascending=False).reset_index(drop=True)
+    # df_load.to_csv(f'./{dandir}/{resultname_mod}')
+    
+    df.sort_values(by=['plddt'], ascending=False).reset_index(drop=True).to_csv(f'./{dandir}/{resultname_mod}')
+    
 
 
 def score_dan_merge (csvname=args.csvname, danresult=args.danresult):
@@ -410,7 +430,7 @@ def score_dan_merge (csvname=args.csvname, danresult=args.danresult):
 
     csvname = csvname.replace('.csv','_plddt.csv')
 
-    df_merge.sort_values(by=['plddt'], ascending=False).reset_index(drop=True).to_csv(csvname)
+    df_merge[df_merge.dSASA_int > 0].sort_values(by=['plddt'], ascending=False).reset_index(drop=True).to_csv(csvname)
 
 
 
@@ -449,7 +469,7 @@ def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
 
         df_merge = df_merge[['description','score','recovery','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','sc_value','side1_normalized','side1_score','side2_normalized','side2_score']]
 
-        df_merge = df_merge[df_merge.dSASA_int > 0].sort_values(by=['score'], ascending=True).reset_index(drop=True).to_csv(csvname)
+        df_merge[df_merge.dSASA_int > 0].sort_values(by=['score'], ascending=True).reset_index(drop=True).to_csv(csvname)
 
     except FileNotFoundError:
         df[df.dSASA_int > 0].sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True).to_csv(csvname)
@@ -459,21 +479,21 @@ def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
 def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, postsele=args.postsele, sorting=args.sorting, designdir=args.designdir):
 
     if postsele == 'false':
-        df = pd.read_csv(csvname).sort_values(by=[sorting], ascending=False)
+        df = pd.read_csv(csvname).sort_values(by=[sorting], ascending=True)
     
-    else:
-        df1 = pd.read_csv(csvname).sort_values(by=[sorting], ascending=False)
-        len = int(round(df1[sorting].count() * 0.05))
-        # len = round(df1[sorting].count() * 0.01)
+    else:        
+        df_orig = pd.read_csv(csvname)
 
-        df = df1.iloc[1:len, :].sort_values(by=['hbonds_int'], ascending=False).reset_index(drop=True)
+        condition = (df_orig.plddt > 0.7) & (df_orig.dSASA_int > 900) & (df_orig.hbonds_int > 3)
+
+        df = df_orig[condition].sort_values(by=['hbonds_int'], ascending=False).reset_index(drop=True)
 
         col_list = list(df.columns)
         col_list[0] = 'original_number'
         df.columns = col_list
 
 
-    pdblist = df['description'].values.tolist()[0:100]
+    pdblist = df['description'].values.tolist()[0:200]
 
     csvname = csvname.replace('.csv', '')
     csvname = csvname.replace('./', '')
@@ -603,7 +623,7 @@ if __name__ == '__main__':
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()        
     elif args.fn == 'dan':
-        dan (minimdir=args.minimdir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
+        dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()  
     elif args.fn == 'score_dan_merge':
@@ -623,7 +643,7 @@ if __name__ == '__main__':
         txt2csv (score, csvname, designdir)
         pdbsorting (csvname, minimdir, dist, postsele, sorting, designdir)
         ((prodigy (minimdir, csvname, prodigyconda)))
-        ((dan (minimdir, danpath, np, danconda)))
+        ((dan (minimdir, dandir, danpath, np, danconda)))
         ((score_dan_merge (csvname, danresult)))
         '''
         )
@@ -631,8 +651,8 @@ if __name__ == '__main__':
 
     
     if args.design_after_design == 'false':
-        # listgen (binderdir=args.binderdir, minilist=args.minilist)
-        # inputprep (template=args.template, minilist=args.minilist, inpdir=args.inpdir)
+        listgen (binderdir=args.binderdir, minilist=args.minilist)
+        inputprep (template=args.template, minilist=args.minilist, inpdir=args.inpdir)
         docking (inpdir=args.inpdir, dockdir=args.dockdir, num_core=args.np, ops=args.ops, nstruct=args.nstruct)
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
         packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packerdir, num_core=args.np, ops=args.ops)
@@ -643,7 +663,7 @@ if __name__ == '__main__':
             prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.prodigyconda)
         else:
             pass
-        dan (minimdir=args.minimdir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
+        dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
         score_dan_merge (csvname=args.csvname, danresult=args.danresult)
         pdbsorting (csvname='final_score_plddt.csv', minimdir=args.minimdir, dist='06_results_pdb', postsele=args.postsele, sorting='plddt', designdir=args.designdir)
 
@@ -652,8 +672,8 @@ if __name__ == '__main__':
         quit()     
 
     elif args.design_after_design == 'true':
-        # listgen (binderdir=args.binderdir, minilist=args.minilist)
-        # inputprep (template=args.template, minilist=args.minilist, inpdir=args.inpdir)
+        listgen (binderdir=args.binderdir, minilist=args.minilist)
+        inputprep (template=args.template, minilist=args.minilist, inpdir=args.inpdir)
         docking (inpdir=args.inpdir, dockdir=args.dockdir, num_core=args.np, ops=args.ops, nstruct=args.nstruct)
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
         packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packerdir, num_core=args.np, ops=args.ops)
@@ -673,9 +693,8 @@ if __name__ == '__main__':
             prodigy (minimdir='08_minimized_files_2', csvname='final_score.csv', prodigyconda=args.prodigyconda)
         else:
             pass
-        dan (minimdir='08_minimized_files_2', danpath=args.danpath, num_core=args.np, danconda=args.danconda)
+        dan (minimdir='08_minimized_files_2', dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
         score_dan_merge (csvname='final_score.csv', danresult=args.danresult)
-        # pdbsorting (csvname='first_score.csv', minimdir=args.minimdir, dist=args.dist, postsele=args.postsele)
         pdbsorting (csvname='final_score_plddt.csv', minimdir='08_minimized_files_2', dist=args.dist, postsele=args.postsele, sorting='plddt', designdir='06_seq_design_files_2')
 
         print ('Working done !')
