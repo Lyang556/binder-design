@@ -7,6 +7,7 @@ import string
 import argparse
 
 import time
+from multiprocessing import Pool
 
 from pymol import cmd
 import pandas as pd
@@ -14,35 +15,50 @@ import numpy as np
 
 parser = argparse.ArgumentParser (description='Script for designing protein binder')
 
-parser.add_argument('--binderdir', required=False, type=str, default='./miniproteins/', help='path to binders')
-parser.add_argument('--minilist', required=False, type=str, default='./miniproteins.list', help='list file' )
+
+# basic
 parser.add_argument('--template', required=False, type=str, default='./templates/my.pdb', help='template file')
-parser.add_argument('--inpdir', required=False, type=str, default='./01_inputs', help='saving path to prepared input files for docking')
+parser.add_argument('--binderdir', required=False, type=str, default='./binders/', help='path to binders')
+parser.add_argument('--np', required=False, type=str, default='4', help='num cores')
+parser.add_argument('--ops', required=False, type=str, default='mac', help='mac or linux')
+parser.add_argument('--nstruct', required=False, type=int, default=1, help='nstruct argument for rosetta')
+
+# list
+parser.add_argument('--minilist', required=False, type=str, default='./binders.list', help='list file' )
+parser.add_argument('--reslist', required=False, type=str, default='./res.list', help='residue list file for patchdock' )
+
+# path
+parser.add_argument('--danpath', required=False, type=str, default='/opt/tools/DeepAccNet/', help='Path to DeepAccNet')
+parser.add_argument('--mpnnpath', required=False, type=str, default='/opt/tools/ProteinMPNN/', help='path to ProteinMPNN')
+parser.add_argument('--patchdockpath', required=False, type=str, default='/opt/tools/PatchDock/', help='path to PatchDock')
+
+# conda
+parser.add_argument('--prodigyconda', required=False, type=str, default='prodigy', help='Name of conda env for PRODIGY')
+parser.add_argument('--danconda', required=False, type=str, default='dan', help='Name of conda env for DeepAccNet')
+parser.add_argument('--mpnnconda', required=False, type=str, default='proteinmpnn', help='Name of conda env for ProteinMPNN')
+
+# dir
+parser.add_argument('--inpdir', required=False, type=str, default='./00_inputs', help='saving path to prepared input files for docking')
+parser.add_argument('--paramdir', required=False, type=str, default='./01_patchdock', help='saving path to prepared input files for docking')
 parser.add_argument('--dockdir', required=False, type=str, default='./02_docking_files', help='saving path to docking files')
 parser.add_argument('--designdir', required=False, type=str, default='./03_seq_design_files', help='saving path to designed sequences')
 parser.add_argument('--packerdir', required=False, type=str, default='./04_packed_files', help='saving path to packed PDB files')
 parser.add_argument('--minimdir', required=False, type=str, default='./05_minimized_files', help='saving path to minimized files')
+parser.add_argument('--dandir', required=False, type=str, default='./09_DAN', help='saving path to binder files for DeepAccNet')
 
-
-parser.add_argument('--fn', required=False, type=str, default='', help='type a function name to use')
+# etc
+parser.add_argument('--danresult', required=False, type=str, default='./09_DAN/DAN_results.csv', help='Name of result csv file of DeepAccNet')
+parser.add_argument('--sorting', required=False, type=str, default='score', help='Sort by ...')
 parser.add_argument('--design_after_design', required=False, type=str, default='true', help='Run design twice')
-
-
-parser.add_argument('--mpnnpath', required=False, type=str, default='/opt/utilities/ProteinMPNN/', help='path to ProteinMPNN')
-parser.add_argument('--mpnnconda', required=False, type=str, default='proteinmpnn', help='Name of conda env for ProteinMPNN')
-parser.add_argument('--prodigyrun', required=False, type=str, default='false', help='Run PRODIGY or not (true/false)')
-parser.add_argument('--prodigyconda', required=False, type=str, default='prodigy', help='Name of conda env for PRODIGY')
-
-
-parser.add_argument('--np', required=False, type=str, default='4', help='num cores')
-parser.add_argument('--ops', required=False, type=str, default='mac', help='mac or linux')
-parser.add_argument('--nstruct', required=False, type=int, default=3, help='nstruct argument for rosetta')
-
-
 parser.add_argument('--score', required=False, type=str, default='./final_score.txt', help='Scorefile to be converted to csv format')
 parser.add_argument('--csvname', required=False, type=str, default='./final_score.csv', help='Name of converted csv file')
-parser.add_argument('--dist', required=False, type=str, default='./09_results_pdb', help='directory to final results')
+parser.add_argument('--dist', required=False, type=str, default='./10_results_pdb', help='directory to final results')
+
+# additional fn
+parser.add_argument('--prodigyrun', required=False, type=str, default='false', help='Run PRODIGY or not (true/false)')
+parser.add_argument('--fn', required=False, type=str, default='', help='type a function name to use')
 parser.add_argument('--postsele', required=False, type=str, default='false', help='')
+
 
 args = parser.parse_args()
 
@@ -58,7 +74,7 @@ def listgen (binderdir=args.binderdir, minilist=args.minilist):
     minilist = minilist.replace('/', '')
 
     if minilist in os.listdir ('./'):
-        print('**-----Please remove the {minilist} file-----**')
+        print(f'**-----Please remove the {minilist} file-----**')
         exit()
        
     miniprotein_list = open (f'{minilist}', 'a')
@@ -70,76 +86,80 @@ def listgen (binderdir=args.binderdir, minilist=args.minilist):
         miniprotein_list.write (f'{binderdir}/{i}' + '\n')
 
 
-def inputprep (template=args.template, minilist=args.minilist, inpdir=args.inpdir):
+def patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist):
 
-    # template loading
-    cmd.load(template)
-
-    # A = lig / B = rec
-    # naming
-    ligand = "".join([random.choice(string.ascii_letters) for _ in range(10)])
-    receptor = "".join([random.choice(string.ascii_letters) for _ in range(10)])
-
-    # chain A to ligand
-    cmd.create(ligand, 'chain A')
-
-    # chain B to receptor
-    cmd.create(receptor, 'chain B')
-
-    inpdir = inpdir.replace('./', '')
-    inpdir = inpdir.replace('/', '')
-
-    if inpdir in os.listdir('./'):
+    if paramdir in os.listdir('./'):
         pass
-
     else:
-        os.mkdir(inpdir)
+        os.mkdir(paramdir)
 
-    with open (minilist, 'r') as scaffold:
-        with open (f'./{inpdir}/inputs_list.list' , 'a') as file:
-            for i in scaffold:
+    # param generate
+    ls = open (minilist)
 
-                # load scaffolds
-                i = i[:-1]
-                ls = []
-                ls = i.split('/')
-                mobile = ls[1].replace('.pdb', '')
+    patchdock = os.path.abspath(patchdock)
+    abs_path = os.path.abspath(template)
+    res_list = os.path.abspath(reslist)
 
-                cmd.load(f'./{i}')
-                cmd.align(mobile, ligand)
+    for i in ls:
+        j = i.split('/')[-1].replace('.pdb','').rstrip()
+        binder_protein = os.path.abspath(i).rstrip()
+        with open (f'{paramdir}/{j}.params', 'w') as param:
+            param.write(f'receptorPdb {abs_path}' + '\n')
+            param.write(f'ligandPdb {binder_protein}' + '\n')
+            param.write(f'protLib {patchdock}/chem.lib' + '\n')
+            param.write(f'log-file {j}.log' + '\n')
+            param.write(f'log-level 0' + '\n')
+            param.write(f'receptorSeg 10.0 20.0 1.5 1 0 1 0' + '\n')
+            param.write(f'ligandSeg 10.0 20.0 1.5 1 0 1 0' + '\n')
+            param.write(f'scoreParams 0.3 -5.0 0.5 0.0 0.0 1500 -8 -4 0 1 0' + '\n')
+            param.write(f'desolvationParams 500.0 1.0' + '\n')
+            param.write(f'clusterParams 0.1 4 2.0 3.0' + '\n')
+            param.write(f'baseParams 4.0 13.0 2' + '\n')
+            param.write(f'matchingParams 1.5 1.5 0.4 0.5 0.9' + '\n')
+            param.write(f'matchAlgorithm 1' + '\n')
+            param.write(f'receptorGrid 0.5 6.0 6.0' + '\n')
+            param.write(f'ligandGrid 0.5 6.0 6.0' + '\n')
+            param.write(f'receptorMs 10.0 1.8' + '\n')
+            param.write(f'ligandMs 10.0 1.8' + '\n')
+            param.write(f'receptorActiveSite {res_list}' + '\n')
 
-                cmd.save(f'./01_inputs/{mobile}.pdb', f'({mobile})+({receptor})')
+            param.close()
 
-                file.write (f'./01_inputs/{mobile}.pdb' + '\n')
-                cmd.delete(mobile)
+    # docking
+    cmd_ls = []
+
+    for i in os.listdir(f'{paramdir}'):
+        outs = i.replace('.params','.out')
+        cmd = f'{patchdock}/patch_dock.Linux {i} {outs}'
+        cmd_ls.append(str(cmd))
+
+    return cmd_ls
 
 
-def docking (inpdir=args.inpdir, dockdir=args.dockdir, num_core=args.np, ops=args.ops, nstruct=args.nstruct):
+def mprun(i):
+    os.system(i)
 
-    inpdir = inpdir.replace('./', '')
-    inpdir = inpdir.replace('/', '')
 
-    dockdir = dockdir.replace('./', '')
-    dockdir = dockdir.replace('/', '')
+def gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath, nstruct=args.nstruct):
 
-    ops = ops.lower()
+    filels = os.listdir(paramdir)
+    out_ls = [file for file in filels if file.endswith('.out')]
 
     if dockdir in os.listdir('./'):
         pass
-
     else:
         os.mkdir(dockdir)
-    
-    if ops == 'mac':
-        docking_protocol = 'docking_protocol.mpi.macosclangrelease'
-    else:
-        docking_protocol = 'docking_protocol.mpi.linuxgccrelease'
 
-    if num_core == 'all':
-        os.system(f'mpirun --use-hwthread-cpus {docking_protocol} -in:file:l ./{inpdir}/inputs_list.list -nstruct {nstruct} -partners A_B -dock_pert 3 8 -ex1 -ex2aro -out:path:all ./{dockdir} -out:suffix _local_dock')
+    for i in out_ls:
+        os.system(f'cp {paramdir}/{i} {dockdir}')
 
-    else: 
-        os.system(f'mpirun -np {num_core} {docking_protocol} -in:file:l ./{inpdir}/inputs_list.list -nstruct {nstruct} -partners A_B -dock_pert 3 8 -ex1 -ex2aro -out:path:all ./{dockdir} -out:suffix _local_dock')
+    os.chdir(dockdir)
+
+    for i in out_ls:
+        os.system(f'perl {patchdock}/transOutput.pl {i} 1 {nstruct}')
+    os.chdir('../')
+
+    os.system(f'rm -rf {dockdir}/*.out')
 
 
 def design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir):
@@ -217,6 +237,9 @@ python {mpnnpath}/vanilla_proteinmpnn/protein_mpnn_run.py \
             df2 = pd.DataFrame([[i, score, recov]], columns=['description', 'score', 'recovery'])
 
             df1 = pd.concat([df1, df2], ignore_index=True)
+
+            df1_newname = i.replace('.fa', '_packer_0001_minimize_0001')
+            df1 = df1.replace({'description' : i}, df1_newname)
 
             # df1 = df1.append(pd.DataFrame([[i, score, recov]], columns=['name', 'score', 'recovery']), ignore_index=True)
 
@@ -352,7 +375,72 @@ def minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=arg
         os.system(f'mpirun -np {num_core} {rosetta_scripts} -in:file:l ./{packerdir}/packer_pdb.list -out:path:all {minimdir} -out:suffix _minimize -parser:protocol ./{minimdir}/minimize.xml -out:file:scorefile score_minim.txt -corrections::beta_nov16 true')
 
     os.system(f'rm -rf ./{minimdir}/minimize.xml')
-    # os.system(f'cp ./{minimdir}/score_minim.txt ./final_score.txt')
+
+
+
+def dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda):
+
+    list_path = os.listdir(f'./{minimdir}/')
+    pdb_list = [file for file in list_path if file.endswith('.pdb')]
+
+    dandir = dandir.replace('\n', '')
+    dandir = dandir.replace('./', '')
+ 
+    if dandir in os.listdir('./'):
+        pass
+    else:
+        os.mkdir(dandir)
+
+      
+    for i in pdb_list:
+        binder = 'binder'
+        cmd.load(f'./{minimdir}/{i}')
+        cmd.create(binder, 'chain A')
+        cmd.save(f'./{dandir}/{i}', f'{binder}')
+        j = i.replace('.pdb','')
+        cmd.remove(j)
+        cmd.remove(binder)
+
+    resultname = 'DAN_results.orig.csv'
+    resultname_mod = 'DAN_results.csv'
+
+    if num_core == 'all':
+        num_core = 2 * (os.cpu_count()) - 2
+    else:
+        pass
+
+    print ('-----------------------------')
+    print ('DeepAccNet running ...')
+    
+    os.system(f'conda run -n {danconda} python3 {danpath}/DeepAccNet.py -r -v -pr --csv --process {num_core} {dandir} ./{dandir}/{resultname} > ./{dandir}/DAN_log.log')
+
+    df = pd.read_csv(f'./{dandir}/{resultname}', delimiter=r'\s+')
+
+    df.columns = ['description', 'plddt']
+
+    # df_load = pd.DataFrame(df).sort_values(by=['plddt'], ascending=False).reset_index(drop=True)
+    # df_load.to_csv(f'./{dandir}/{resultname_mod}')
+    
+    df.sort_values(by=['plddt'], ascending=False).reset_index(drop=True).to_csv(f'./{dandir}/{resultname_mod}')
+    
+
+
+def score_dan_merge (csvname=args.csvname, danresult=args.danresult):
+
+    df1 = pd.read_csv(csvname)
+    df2 = pd.read_csv(danresult)
+
+    df_merge = pd.merge(df1, df2, on='description')
+
+    df_merge = df_merge[['description','plddt','score','recovery','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','sc_value','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','side1_normalized','side1_score','side2_normalized','side2_score']]
+  
+    csvname = csvname.replace('./', '')
+    csvname = csvname.replace('/', '')
+
+    csvname = csvname.replace('.csv','_plddt.csv')
+
+    df_merge[df_merge.dSASA_int > 0].sort_values(by=['plddt'], ascending=False).reset_index(drop=True).to_csv(csvname)
+
 
 
 def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
@@ -370,13 +458,13 @@ def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
 
     df = pd.read_csv(csvname)
 
-    desc_list = list(np.array(df['description'].tolist()))
+    # desc_list = list(np.array(df['description'].tolist()))
 
-    for i in desc_list:
-        newname = i[:-26]
-        df = df.replace({'description' : i}, newname)
+    # for i in desc_list:
+    #     newname = i[:-26]
+    #     df = df.replace({'description' : i}, newname)
 
-    df = df[['description','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','sc_value','side1_normalized','side1_score','side2_normalized','side2_score']]
+    # df = df[['description','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','sc_value','side1_normalized','side1_score','side2_normalized','side2_score']]
     # df.to_csv('df_.csv')
     # df.sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True).to_csv(csvname)
 
@@ -386,45 +474,36 @@ def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
 
         df2 = pd.read_csv (f'./{designdir}/seqs/design_result_merged.csv')
 
-        df2_desc_list = list(np.array(df2['description'].tolist()))
-
-        for i in df2_desc_list:
-            df2_newname = i.replace('.fa', '')
-            df2 = df2.replace({'description' : i}, df2_newname)
-
-        # df2.to_csv('df_2_.csv')
-
         df_merge = pd.merge(df, df2, on='description')
-
-        # df_merge.to_csv('df_merge_.csv')
-
 
         df_merge = df_merge[['description','score','recovery','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','sc_value','side1_normalized','side1_score','side2_normalized','side2_score']]
 
-        
-        df_merge.sort_values(by=['score'], ascending=True).reset_index(drop=True).to_csv(csvname)
+        df_merge[df_merge.dSASA_int > 0].sort_values(by=['score'], ascending=True).reset_index(drop=True).to_csv(csvname)
 
     except FileNotFoundError:
-        df.sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True).to_csv(csvname)
+        df[df.dSASA_int > 0].sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True).to_csv(csvname)
 
 
-def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, postsele=args.postsele):
+
+def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, postsele=args.postsele, sorting=args.sorting, designdir=args.designdir):
 
     if postsele == 'false':
-        df = pd.read_csv(csvname).sort_values(by=['score'], ascending=True)
+        df = pd.read_csv(csvname).sort_values(by=[sorting], ascending=True)
     
-    else:
-        df1 = pd.read_csv(csvname).sort_values(by=['score'], ascending=True)
-        len = round(df1['score'].count() * 0.1)
+    else:        
+        df_orig = pd.read_csv(csvname)
 
-        df = df1.iloc[1:len, :].sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True)
+        condition = (df_orig.plddt > 0.7) & (df_orig.dSASA_int > 900) & (df_orig.hbonds_int > 3)
+        # condition = (df_orig.plddt > 0.7) & (df_orig.dSASA_int > 900) & (df_orig.hbonds_int > 3) & (df_orig.sc_value > 0.45)
+
+        df = df_orig[condition].sort_values(by=['sc_value'], ascending=False).reset_index(drop=True)
 
         col_list = list(df.columns)
         col_list[0] = 'original_number'
         df.columns = col_list
 
 
-    pdblist = df['description'].values.tolist()[0:10]
+    pdblist = df['description'].values.tolist()[0:200]
 
     csvname = csvname.replace('.csv', '')
     csvname = csvname.replace('./', '')
@@ -439,25 +518,33 @@ def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, po
     if postsele == 'false':
         pdbpath = 'rank_' + minimdir
         pass
-
     else:
         df.to_csv(f'{csvname}_selected.csv')
         pdbpath = 'Post_selected_rank_' + minimdir
 
+
     if dist in os.listdir('./'):
         pass
-
     else:
         os.mkdir(dist)
+
 
     if pdbpath in os.listdir(f'./{dist}'):
         pass
     else:
         os.mkdir(f'{dist}/{pdbpath}')
 
+    if 'fastas' in os.listdir(f'./{dist}/{pdbpath}/'):
+        pass
+    else:
+        os.mkdir(f'./{dist}/{pdbpath}/fastas')
+
+
     for i, j in enumerate (pdblist):
         i += 1
-        os.system(f'cp ./{minimdir}/{j}_packer_0001_minimize_0001.pdb ./{dist}/{pdbpath}/rank_{i}_in_{minimdir}_{j}.pdb')
+        m = j[:-26]
+        os.system(f'cp ./{minimdir}/{j}.pdb ./{dist}/{pdbpath}/rank_{i}_in_{minimdir}_{j}.pdb')
+        os.system(f'cp ./{designdir}/seqs/{m}.fa ./{dist}/{pdbpath}/fastas/rank_{i}_in_{minimdir}_{m}.fa')
 
     
 def prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.prodigyconda):
@@ -513,14 +600,27 @@ if __name__ == '__main__':
         listgen (binderdir=args.binderdir, minilist=args.minilist)
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()
-    elif args.fn == 'inputprep':
-        inputprep (template=args.template, minilist=args.minilist, inpdir=args.inpdir)
+    elif args.fn == 'patchdock':
+        cmd_list = patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist)
+
+        paramdir=args.paramdir
+        os.chdir(paramdir)
+
+        if args.np == 'all':
+            nc = 2 * (os.cpu_count()) - 2
+        else:
+            pass
+
+        p = Pool(processes=int(nc))
+        rls = p.map(mprun, cmd_list)
+        os.chdir('../')
+
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()
-    elif args.fn == 'docking':
-        docking (inpdir=args.inpdir, dockdir=args.dockdir, num_core=args.np, ops=args.ops, nstruct=args.nstruct)
+    elif args.fn == 'gen_pdb':
+        gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath)
         print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()
+        quit()        
     elif args.fn == 'design':
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
         print ('Elapsed time: ', time.time() - start, 'sec')
@@ -538,26 +638,36 @@ if __name__ == '__main__':
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()
     elif args.fn == 'pdbsorting':
-        pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, postsele=args.postsele)
+        pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, postsele=args.postsele, sorting=args.sorting, designdir=args.designdir)
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()
     elif args.fn == 'prodigy':
         prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.prodigyconda)
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()        
+    elif args.fn == 'dan':
+        dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
+        print ('Elapsed time: ', time.time() - start, 'sec')
+        quit()  
+    elif args.fn == 'score_dan_merge':
+        score_dan_merge (csvname=args.csvname, danresult=args.danresult)
+        print ('Elapsed time: ', time.time() - start, 'sec')
+        quit()  
     else:
         print ('Please select one of the functions below and enter it.')
         print (
         '''
         listgen (binderdir, minilist)
-        inputprep (template, minilist, inpdir)
-        docking (inpdir, dockdir, np, ops, nstruct)
+        patch_dock (template, minilist, paramdir, patchdockpath, reslist)
+        gen_pdb(paramdir, dockdir, patchdockpath, nstruct)
         design (mpnnpath, mpnnconda, designdir, dockdir)
         packer (designdir, dockdir, packerdir, np, ops)
         minim_intana (packerdir, minimdir, np, ops)
         txt2csv (score, csvname, designdir)
-        pdbsorting (csvname, minimdir, dist, postsele)
+        pdbsorting (csvname, minimdir, dist, postsele, sorting, designdir)
         ((prodigy (minimdir, csvname, prodigyconda)))
+        ((dan (minimdir, dandir, danpath, np, danconda)))
+        ((score_dan_merge (csvname, danresult)))
         '''
         )
         quit()
@@ -565,8 +675,21 @@ if __name__ == '__main__':
     
     if args.design_after_design == 'false':
         listgen (binderdir=args.binderdir, minilist=args.minilist)
-        inputprep (template=args.template, minilist=args.minilist, inpdir=args.inpdir)
-        docking (inpdir=args.inpdir, dockdir=args.dockdir, num_core=args.np, ops=args.ops, nstruct=args.nstruct)
+        cmd_list = patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist)
+
+        paramdir=args.paramdir
+        os.chdir(paramdir)
+
+        if args.np == 'all':
+            nc = os.cpu_count()
+        else:
+            pass
+
+        p = Pool(processes=int(nc))
+        rls = p.map(mprun, cmd_list)
+        os.chdir('../')
+
+        gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath, nstruct=args.nstruct)
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
         packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packerdir, num_core=args.np, ops=args.ops)
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
@@ -576,7 +699,9 @@ if __name__ == '__main__':
             prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.prodigyconda)
         else:
             pass
-        pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist='06_results_pdb', postsele=args.postsele)
+        dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
+        score_dan_merge (csvname=args.csvname, danresult=args.danresult)
+        pdbsorting (csvname='final_score_plddt.csv', minimdir=args.minimdir, dist='06_results_pdb', postsele=args.postsele, sorting='plddt', designdir=args.designdir)
 
         print ('Working done !')
         print ('Elapsed time: ', time.time() - start, 'sec')
@@ -584,8 +709,21 @@ if __name__ == '__main__':
 
     elif args.design_after_design == 'true':
         listgen (binderdir=args.binderdir, minilist=args.minilist)
-        inputprep (template=args.template, minilist=args.minilist, inpdir=args.inpdir)
-        docking (inpdir=args.inpdir, dockdir=args.dockdir, num_core=args.np, ops=args.ops, nstruct=args.nstruct)
+        cmd_list = patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist)
+
+        paramdir=args.paramdir
+        os.chdir(paramdir)
+
+        if args.np == 'all':
+            nc = os.cpu_count()
+        else:
+            pass
+
+        p = Pool(processes=int(nc))
+        rls = p.map(mprun, cmd_list)
+        os.chdir('../')
+
+        gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath, nstruct=args.nstruct)
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
         packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packerdir, num_core=args.np, ops=args.ops)
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
@@ -604,8 +742,9 @@ if __name__ == '__main__':
             prodigy (minimdir='08_minimized_files_2', csvname='final_score.csv', prodigyconda=args.prodigyconda)
         else:
             pass
-        pdbsorting (csvname='first_score.csv', minimdir=args.minimdir, dist=args.dist, postsele=args.postsele)
-        pdbsorting (csvname='final_score.csv', minimdir='08_minimized_files_2', dist=args.dist, postsele=args.postsele)
+        dan (minimdir='08_minimized_files_2', dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
+        score_dan_merge (csvname='final_score.csv', danresult=args.danresult)
+        pdbsorting (csvname='final_score_plddt.csv', minimdir='08_minimized_files_2', dist=args.dist, postsele=args.postsele, sorting='plddt', designdir='06_seq_design_files_2')
 
         print ('Working done !')
         print ('Elapsed time: ', time.time() - start, 'sec')
