@@ -21,11 +21,11 @@ parser.add_argument('--template', required=False, type=str, default='./templates
 parser.add_argument('--binderdir', required=False, type=str, default='./binders/', help='path to binders')
 parser.add_argument('--np', required=False, type=str, default='4', help='num cores')
 parser.add_argument('--ops', required=False, type=str, default='mac', help='mac or linux')
-parser.add_argument('--nstruct', required=False, type=int, default=1, help='nstruct argument for rosetta')
+parser.add_argument('--nstruct', required=False, type=int, default=1, help='nstruct argument for PatchDock')
 
 # list
 parser.add_argument('--minilist', required=False, type=str, default='./binders.list', help='list file' )
-parser.add_argument('--reslist', required=False, type=str, default='./res.list', help='residue list file for patchdock' )
+parser.add_argument('--reslist', required=False, type=str, default='./res.list', help='residue list file for PatchDock' )
 
 # path
 parser.add_argument('--danpath', required=False, type=str, default='/opt/tools/DeepAccNet/', help='Path to DeepAccNet')
@@ -665,8 +665,8 @@ if __name__ == '__main__':
         minim_intana (packerdir, minimdir, np, ops)
         txt2csv (score, csvname, designdir)
         pdbsorting (csvname, minimdir, dist, postsele, sorting, designdir)
+        dan (minimdir, dandir, danpath, np, danconda)
         ((prodigy (minimdir, csvname, prodigyconda)))
-        ((dan (minimdir, dandir, danpath, np, danconda)))
         ((score_dan_merge (csvname, danresult)))
         '''
         )
