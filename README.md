@@ -5,14 +5,22 @@ Script to design protein binder using Rosetta and ProteinMPNN.
 ## Requirements
 
 ```
-Rosetta
-ProteinMPNN (in conda environment)
+Required
 
-Pytorch
-Pandas
-Numpy
-python-dateutil
-PyMOL
+    Rosetta
+    PatchDock
+
+    Conda env
+        * name: binderdesign
+            - Numpy
+            - Pandas
+            - PyMOL
+
+        * name: ProteinMPNN
+            - ProteinMPNN
+
+        * name: dan
+            - DeepAccNet
 ```
 
 - - -
@@ -24,15 +32,22 @@ PyMOL
 
 ### 1. Env setup
 
-#### conda
+#### conda envs
 
 ```
 conda create -n binderdesign python=3.7.0
-
-conda install -c pytorch pytorch=1.11.0
-conda install -c anaconda numpy pandas python-dateutil
+conda install -c anaconda numpy pandas
 conda install -c schrodinger pymol
 ```
+
+for ProteinMPNN and DeepAccNet (dan), please find the related github page.
+
+*[ProteinMPNN](https://github.com/dauparas/ProteinMPNN)*
+<br>
+
+*[DeepAccNet](https://github.com/hiranumn/DeepAccNet)*
+
+<br>
 
 #### ProteinMPNN
 
@@ -42,28 +57,29 @@ git clone https://github.com/dauparas/ProteinMPNN
 
 and then move the ProteinMPNN directory to somewhere (eg. /opt/tools/ProteinMPNN/)
 
+<br>
 
 #### Rosetta
 
-https://www.rosettacommons.org
+*https://www.rosettacommons.org*
 
-It is required to compile mpi version of rosetta
+It is required to compile mpi version of rosetta especially in the case of rosetta_script and fixbb.
+
+In addition, the name of binary files (rosetta_script and fixbb) have to be   
+ `rosetta_scripts.mpi.macosclangrelease` and `fixbb.mpi.macosclangrelease` in macOS,
+ and `rosetta_scripts.mpi.linuxgccrelease` and `fixbb.mpi.linuxgccrelease` in linux.
 
 <br>
 
 ### 2. Template preparation
 
-'Template' is a PDB file containing a target and a binder. 
-
-Considering how rosetta docking works, once you have selected the surface on your target for the binding of binder, a binder should be properly positioned around that surface. 
-
-In the template PDB file, binder should be set to chain A and target to chain B, Since the PyMOL could properly visualize your structure regardless of the order of chain arrangement, you should make sure that the chain order is sorted from A to B even in the PDB file opened in the text editor such as vim.
+'Template' is a PDB file of target whose chain set to 'B'.
 
 <br>
 
 ### 3. Binder library
 
-You can find the library of miniproteins (binders) in the supplementary data of *Cao_2022_Nature* paper.
+You can find the library of miniproteins (binders) in the supplementary data of *Cao_2021_Nature* paper.
 
 <br>
 
@@ -91,38 +107,72 @@ You can find the library of miniproteins (binders) in the supplementary data of 
 
 ### 4. run the script
 
-flags
+*flags*
 
 ```
-parser.add_argument('--binderdir', required=False, type=str, default='./miniproteins/', help='path to miniproteins')
-parser.add_argument('--minilist', required=False, type=str, default='./miniproteins.list', help='list file' )
-parser.add_argument('--template', required=False, type=str, default='./templates/my.pdb', help='template file')
-parser.add_argument('--inpdir', required=False, type=str, default='./01_inputs', help='saving path to prepared input files')
-parser.add_argument('--dockdir', required=False, type=str, default='./02_docking_files', help='saving path to docking files')
-parser.add_argument('--designdir', required=False, type=str, default='./03_seq_design_files', help='saving path to designed sequences')
-parser.add_argument('--packerdir', required=False, type=str, default='./04_packed_files', help='saving path to packed PDB files')
-parser.add_argument('--minimdir', required=False, type=str, default='./05_minimized_files', help='saving path to minimized files')
+usage: protein_binder_design_ver2.py [-h] [--template TEMPLATE]
+                                     [--binderdir BINDERDIR] [--np NP]
+                                     [--ops OPS] [--nstruct NSTRUCT]
+                                     [--minilist MINILIST] [--reslist RESLIST]
+                                     [--danpath DANPATH] [--mpnnpath MPNNPATH]
+                                     [--patchdockpath PATCHDOCKPATH]
+                                     [--prodigyconda PRODIGYCONDA]
+                                     [--danconda DANCONDA]
+                                     [--mpnnconda MPNNCONDA] [--inpdir INPDIR]
+                                     [--paramdir PARAMDIR] [--dockdir DOCKDIR]
+                                     [--designdir DESIGNDIR]
+                                     [--packerdir PACKERDIR]
+                                     [--minimdir MINIMDIR] [--dandir DANDIR]
+                                     [--danresult DANRESULT]
+                                     [--sorting SORTING]
+                                     [--design_after_design DESIGN_AFTER_DESIGN]
+                                     [--score SCORE] [--csvname CSVNAME]
+                                     [--dist DIST] [--prodigyrun PRODIGYRUN]
+                                     [--fn FN] [--postsele POSTSELE]
 
+Script for designing protein binder
 
-parser.add_argument('--fn', required=False, type=str, default='', help='type a function name to use')
-parser.add_argument('--design_after_design', required=False, type=str, default='true', help='Run design twice')
+optional arguments:
+  -h, --help            show this help message and exit
+  --template TEMPLATE   template file
+  --binderdir BINDERDIR
+                        path to binders
+  --np NP               num cores
+  --ops OPS             mac or linux
+  --nstruct NSTRUCT     nstruct argument for PatchDock
+  --minilist MINILIST   list file
+  --reslist RESLIST     residue list file for PatchDock
+  --danpath DANPATH     Path to DeepAccNet
+  --mpnnpath MPNNPATH   path to ProteinMPNN
+  --patchdockpath PATCHDOCKPATH
+                        path to PatchDock
+  --prodigyconda PRODIGYCONDA
+                        Name of conda env for PRODIGY
+  --danconda DANCONDA   Name of conda env for DeepAccNet
+  --mpnnconda MPNNCONDA
+                        Name of conda env for ProteinMPNN
+  --inpdir INPDIR       saving path to prepared input files for docking
+  --paramdir PARAMDIR   saving path to prepared input files for docking
+  --dockdir DOCKDIR     saving path to docking files
+  --designdir DESIGNDIR
+                        saving path to designed sequences
+  --packerdir PACKERDIR
+                        saving path to packed PDB files
+  --minimdir MINIMDIR   saving path to minimized files
+  --dandir DANDIR       saving path to binder files for DeepAccNet
+  --danresult DANRESULT
+                        Name of result csv file of DeepAccNet
+  --sorting SORTING     Sort by ...
+  --design_after_design DESIGN_AFTER_DESIGN
+                        Run design twice
+  --score SCORE         Scorefile to be converted to csv format
+  --csvname CSVNAME     Name of converted csv file
+  --dist DIST           directory to final results
+  --prodigyrun PRODIGYRUN
+                        Run PRODIGY or not (true/false)
+  --fn FN               type a function name to use
+  --postsele POSTSELE
 
-
-parser.add_argument('--mpnnpath', required=False, type=str, default='/opt/utilities/ProteinMPNN/', help='path to ProteinMPNN')
-parser.add_argument('--mpnnconda', required=False, type=str, default='proteinmpnn', help='Name of conda env for ProteinMPNN')
-parser.add_argument('--prodigyrun', required=False, type=str, default='false', help='Run PRODIGY or not (true/false)')
-parser.add_argument('--prodigyconda', required=False, type=str, default='prodigy', help='Name of conda env for PRODIGY')
-
-
-parser.add_argument('--np', required=False, type=str, default='4', help='num cores')
-parser.add_argument('--ops', required=False, type=str, default='mac', help='mac or linux')
-parser.add_argument('--nstruct', required=False, type=int, default=3, help='nstruct argument for rosetta')
-
-
-parser.add_argument('--score', required=False, type=str, default='./final_score.txt', help='Scorefile to be converted to csv format')
-parser.add_argument('--csvname', required=False, type=str, default='./final_score.csv', help='Name of converted csv file')
-parser.add_argument('--dist', required=False, type=str, default='./09_results_pdb', help='directory to final results')
-parser.add_argument('--postsele', required=False, type=str, default='false', help='')
 ```
 
 <br>
@@ -132,17 +182,19 @@ parser.add_argument('--postsele', required=False, type=str, default='false', hel
 python3 protein_binder_design.py \
     --binderdir ./binders/
     --template ./template/template.pdb
-    --mpnnpath /opt/utilities/ProteinMPNN/
-    --mpnnconda binderdesign
+    --mpnnpath /opt/tools/ProteinMPNN/
+    --patchdockpath /opt/tools/PatchDock/
+    --danpath /opt/tools/DeepAccNet/
     --np 8
     --ops mac
+    --nstruct 2
 ```
 
-The script automatically run the rosetta docking,
+The script automatically run the `PatchDock`
 
 and `seq. design` > `rosetta packing` > `rosetta minimize` will be then repeated twice.
 
-You can find 9 new folders in your working directory, and several csv files containing scores of rosetta minimize and ProteinMPNN.
+You can find 10 new folders in your working directory, and several csv files containing scores.
 
 
 <br>
@@ -159,15 +211,16 @@ try to use `--fn` flag.
 python3 protein_binder_design.py --fn x
 
         listgen (binderdir, minilist)
-        inputprep (template, minilist, inpdir)
-        docking (inpdir, dockdir, np, ops, nstruct)
+        patch_dock (template, minilist, paramdir, patchdockpath, reslist)
+        gen_pdb(paramdir, dockdir, patchdockpath, nstruct)
         design (mpnnpath, mpnnconda, designdir, dockdir)
         packer (designdir, dockdir, packerdir, np, ops)
         minim_intana (packerdir, minimdir, np, ops)
         txt2csv (score, csvname, designdir)
-        pdbsorting (csvname, minimdir, dist, postsele)
+        pdbsorting (csvname, minimdir, dist, postsele, sorting, designdir)
+        dan (minimdir, dandir, danpath, np, danconda)
         ((prodigy (minimdir, csvname, prodigyconda)))
-
+        ((score_dan_merge (csvname, danresult)))
 
 
 # example
@@ -180,9 +233,4 @@ python3 protein_binder_design.py \
 ```
 
 
-You can utilize it when you want to change docking protocol that you want (such as Rifdock?).
-
-
-
-
-
+You can utilize it when you want to change docking protocol that you want (such as Rifdock / zdock ...).
