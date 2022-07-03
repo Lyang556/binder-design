@@ -607,9 +607,9 @@ if __name__ == '__main__':
         os.chdir(paramdir)
 
         if args.np == 'all':
-            nc = 2 * (os.cpu_count()) - 2
+            nc = os.cpu_count()
         else:
-            pass
+            nc = args.np
 
         p = Pool(processes=int(nc))
         rls = p.map(mprun, cmd_list)
@@ -683,7 +683,7 @@ if __name__ == '__main__':
         if args.np == 'all':
             nc = os.cpu_count()
         else:
-            pass
+            nc = args.np
 
         p = Pool(processes=int(nc))
         rls = p.map(mprun, cmd_list)
@@ -717,7 +717,7 @@ if __name__ == '__main__':
         if args.np == 'all':
             nc = os.cpu_count()
         else:
-            pass
+            nc = args.np
 
         p = Pool(processes=int(nc))
         rls = p.map(mprun, cmd_list)
