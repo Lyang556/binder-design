@@ -66,8 +66,10 @@ and then move the ProteinMPNN directory to somewhere (eg. /opt/tools/ProteinMPNN
 It is required to compile mpi version of rosetta especially in the case of rosetta_script and fixbb.
 
 In addition, the name of binary files (rosetta_script and fixbb) have to be   
- `rosetta_scripts.mpi.macosclangrelease` and `fixbb.mpi.macosclangrelease` in macOS,
- and `rosetta_scripts.mpi.linuxgccrelease` and `fixbb.mpi.linuxgccrelease` in linux.
+
+`rosetta_scripts.mpi.macosclangrelease` and `fixbb.mpi.macosclangrelease` in macOS,
+
+and `rosetta_scripts.mpi.linuxgccrelease` and `fixbb.mpi.linuxgccrelease` in linux.
 
 <br>
 
