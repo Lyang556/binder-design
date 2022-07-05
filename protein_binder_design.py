@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Script for designing protein binder
 # Miniproteins in this repository is originated from the supplementary data in Cao et al., (2022). Nature. 605, 551-560 
 
@@ -8,6 +10,7 @@ import argparse
 
 import time
 from multiprocessing import Pool
+from functools import partial
 
 from pymol import cmd
 import pandas as pd
@@ -70,8 +73,7 @@ def listgen (binderdir=args.binderdir, minilist=args.minilist):
     list_path = os.listdir(binderdir)
     pdb_list_path = [file for file in list_path if file.endswith('.pdb')]
 
-    minilist = minilist.replace('./', '')
-    minilist = minilist.replace('/', '')
+    minilist = minilist.replace('./', '').replace('/', '')
 
     if minilist in os.listdir ('./'):
         print(f'**-----Please remove the {minilist} file-----**')
@@ -79,8 +81,7 @@ def listgen (binderdir=args.binderdir, minilist=args.minilist):
        
     miniprotein_list = open (f'{minilist}', 'a')
 
-    binderdir = binderdir.replace('./', '')
-    binderdir = binderdir.replace('/', '')
+    binderdir = binderdir.replace('./', '').replace('/', '')
 
     for i in pdb_list_path:
         miniprotein_list.write (f'{binderdir}/{i}' + '\n')
@@ -199,8 +200,7 @@ python {mpnnpath}/vanilla_proteinmpnn/protein_mpnn_run.py \
         --batch_size 1
 """
 
-    designdir = designdir.replace('./', '')
-    designdir = designdir.replace('/', '')
+    designdir = designdir.replace('./', '').replace('/', '')
 
     if designdir in os.listdir('./'):
         pass
@@ -246,17 +246,20 @@ python {mpnnpath}/vanilla_proteinmpnn/protein_mpnn_run.py \
     df1.to_csv(f'./{designdir}/seqs/design_result_merged.csv')
 
 
-
-def packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packerdir, num_core=args.np, ops=args.ops):
+def ls_for_packer (designdir=args.designdir):
     
-    designdir = designdir.replace('./', '')
-    designdir = designdir.replace('/', '')
+    designdir = designdir.replace('./', '').replace('/', '')
 
-    dockdir = dockdir.replace('./', '')
-    dockdir = dockdir.replace('/', '')
+    mpnn_list = os.listdir(f'./{designdir}/seqs/')
 
-    packerdir = packerdir.replace('./', '')
-    packerdir = packerdir.replace('/', '')
+    return mpnn_list
+
+
+def packer (designdir, dockdir, packerdir, ops, i):
+    
+    designdir = designdir.replace('./', '').replace('/', '')
+    dockdir = dockdir.replace('./', '').replace('/', '')
+    packerdir = packerdir.replace('./', '').replace('/', '')
 
     ops = ops.lower()
     
@@ -265,36 +268,31 @@ def packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packe
     else:
         fixbb = 'fixbb.mpi.linuxgccrelease'
 
+
     if packerdir in os.listdir('./'):
         pass
-
     else:
         os.mkdir(packerdir)
 
-    mpnn_list = os.listdir(f'./{designdir}/seqs/')
 
-    for i in mpnn_list:
-        with open (f'./{designdir}/seqs/{i}', 'r') as fasta:
-            seqs = fasta.readlines()[3].rstrip()
-            seqs = list(seqs)
-            with open ('./resfile.txt', 'w') as resfile:
-                resfile.write ('NATRO' + '\n')
-                resfile.write ('start' + '\n')            
-                for num, seq in enumerate (seqs):
-                    resfile.writelines (str(num + 1) + f' A PIKAA {seq}' + '\n')
-                
-                resfile.close()
-            fasta.close()    
+    with open (f'./{designdir}/seqs/{i}', 'r') as fasta:
+        seqs = fasta.readlines()[3].rstrip()
+        seqs = list(seqs)
+        i_new = i.replace('.fa','')
+        with open (f'./{i_new}_resfile.txt', 'w') as resfile:
+            resfile.write ('NATRO' + '\n')
+            resfile.write ('start' + '\n')            
+            for num, seq in enumerate (seqs):
+                resfile.writelines (str(num + 1) + f' A PIKAA {seq}' + '\n')
+            
+            resfile.close()
+        fasta.close()    
 
-        j = i.replace ('.fa', '.pdb')
+    j = i.replace ('.fa', '.pdb')
 
-        if num_core == 'all':
-            os.system(f'mpirun --use-hwthread-cpus {fixbb} -in:file:s ./{dockdir}/{j} -in:file:fullatom -resfile resfile.txt -out:path:all {packerdir} -out:suffix _packer')
+    os.system(f'{fixbb} -in:file:s ./{dockdir}/{j} -in:file:fullatom -resfile {i_new}_resfile.txt -out:path:all {packerdir} -out:suffix _packer')
 
-        else:
-            os.system(f'mpirun -np {num_core} {fixbb} -in:file:s ./{dockdir}/{j} -in:file:fullatom -resfile resfile.txt -out:path:all {packerdir} -out:suffix _packer')
-
-    os.system('rm -rf resfile.txt')
+    os.system(f'rm -rf {i_new}_resfile.txt')
 
     packed_files = os.listdir(packerdir)
     packed_list_path = [file for file in packed_files if file.endswith('.pdb')]
@@ -344,12 +342,8 @@ def minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=arg
 </ROSETTASCRIPTS>
 """
 
-    minimdir = minimdir.replace('./', '')
-    minimdir = minimdir.replace('/', '')
-
-    packerdir = packerdir.replace('./', '')
-    packerdir = packerdir.replace('/', '')
-
+    minimdir = minimdir.replace('./', '').replace('/', '')
+    packerdir = packerdir.replace('./', '').replace('/', '')
 
     if minimdir in os.listdir('./'):
         pass
@@ -383,8 +377,7 @@ def dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_c
     list_path = os.listdir(f'./{minimdir}/')
     pdb_list = [file for file in list_path if file.endswith('.pdb')]
 
-    dandir = dandir.replace('\n', '')
-    dandir = dandir.replace('./', '')
+    dandir = dandir.replace('\n', '').replace('./', '')
  
     if dandir in os.listdir('./'):
         pass
@@ -434,8 +427,7 @@ def score_dan_merge (csvname=args.csvname, danresult=args.danresult):
 
     df_merge = df_merge[['description','plddt','score','recovery','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','sc_value','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','side1_normalized','side1_score','side2_normalized','side2_score']]
   
-    csvname = csvname.replace('./', '')
-    csvname = csvname.replace('/', '')
+    csvname = csvname.replace('./', '').replace('/', '')
 
     csvname = csvname.replace('.csv','_plddt.csv')
 
@@ -469,8 +461,7 @@ def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
     # df.sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True).to_csv(csvname)
 
     try:
-        designdir = designdir.replace('./', '')
-        designdir = designdir.replace('/', '')
+        designdir = designdir.replace('./', '').replace('/', '')
 
         df2 = pd.read_csv (f'./{designdir}/seqs/design_result_merged.csv')
 
@@ -505,15 +496,9 @@ def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, po
 
     pdblist = df['description'].values.tolist()[0:200]
 
-    csvname = csvname.replace('.csv', '')
-    csvname = csvname.replace('./', '')
-    csvname = csvname.replace('/', '')
-
-    dist = dist.replace('./', '')
-    dist = dist.replace('/', '')
-
-    minimdir = minimdir.replace('./', '')
-    minimdir = minimdir.replace('/', '')
+    csvname = csvname.replace('.csv', '').replace('./', '').replace('/', '')
+    dist = dist.replace('./', '').replace('/', '')
+    minimdir = minimdir.replace('./', '').replace('/', '')
 
     if postsele == 'false':
         pdbpath = 'rank_' + minimdir
@@ -551,8 +536,7 @@ def prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.pro
     print ('-----------------------------')
     print ('PRODIGY running ...')
 
-    minimdir = minimdir.replace('./','')
-    minimdir = minimdir.replace('/','')
+    minimdir = minimdir.replace('./','').replace('/','')
 
     pdbs = os.listdir(minimdir)
     pdblist = [file for file in pdbs if file.endswith('.pdb')]
@@ -580,9 +564,7 @@ def prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.pro
         
     os.system(f'rm -rf ./{minimdir}/temp.txt')
 
-    csvname = csvname.replace('.csv', '')
-    csvname = csvname.replace('./','')
-    csvname = csvname.replace('/','')
+    csvname = csvname.replace('.csv', '').replace('./','').replace('/','')
 
     df1.to_csv(f'{csvname}_E_calculated.csv')
 
@@ -607,7 +589,7 @@ if __name__ == '__main__':
         os.chdir(paramdir)
 
         if args.np == 'all':
-            nc = os.cpu_count()
+            nc = os.cpu_count() - 1
         else:
             nc = args.np
 
@@ -626,7 +608,24 @@ if __name__ == '__main__':
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()        
     elif args.fn == 'packer':
-        packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packerdir, num_core=args.np, ops=args.ops)
+
+        mpnn_list = ls_for_packer (designdir=args.designdir)
+        
+        if args.np == 'all':
+            nc = os.cpu_count() - 1
+        else:
+            nc = args.np
+        
+        designdir_mp=args.designdir
+        dockdir_mp=args.dockdir
+        packerdir_mp=args.packerdir
+        ops_mp=args.ops
+
+        func_packer = partial(packer, designdir_mp, dockdir_mp, packerdir_mp, ops_mp)
+
+        p = Pool(processes=int(nc))
+        p.map(func_packer, mpnn_list)   
+
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()        
     elif args.fn == 'minim_intana':
@@ -681,7 +680,7 @@ if __name__ == '__main__':
         os.chdir(paramdir)
 
         if args.np == 'all':
-            nc = os.cpu_count()
+            nc = os.cpu_count() - 1
         else:
             nc = args.np
 
@@ -691,7 +690,24 @@ if __name__ == '__main__':
 
         gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath, nstruct=args.nstruct)
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
-        packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packerdir, num_core=args.np, ops=args.ops)
+        
+        mpnn_list = ls_for_packer (designdir=args.designdir)
+        
+        if args.np == 'all':
+            nc = os.cpu_count() - 1
+        else:
+            nc = args.np
+        
+        designdir_mp=args.designdir
+        dockdir_mp=args.dockdir
+        packerdir_mp=args.packerdir
+        ops_mp=args.ops
+
+        func_packer = partial(packer, designdir_mp, dockdir_mp, packerdir_mp, ops_mp)
+
+        p = Pool(processes=int(nc))
+        p.map(func_packer, mpnn_list)   
+        
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
         os.system(f'cp ./{args.minimdir}/score_minim.txt ./final_score.txt')
         txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir)
@@ -715,17 +731,34 @@ if __name__ == '__main__':
         os.chdir(paramdir)
 
         if args.np == 'all':
-            nc = os.cpu_count()
+            nc = os.cpu_count() - 1
         else:
             nc = args.np
 
         p = Pool(processes=int(nc))
-        rls = p.map(mprun, cmd_list)
+        p.map(mprun, cmd_list)
         os.chdir('../')
 
         gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath, nstruct=args.nstruct)
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
-        packer (designdir=args.designdir, dockdir=args.dockdir, packerdir=args.packerdir, num_core=args.np, ops=args.ops)
+        
+        mpnn_list = ls_for_packer (designdir=args.designdir)
+        
+        if args.np == 'all':
+            nc = os.cpu_count() - 1
+        else:
+            nc = args.np
+        
+        designdir_mp=args.designdir
+        dockdir_mp=args.dockdir
+        packerdir_mp=args.packerdir
+        ops_mp=args.ops
+
+        func_packer = partial(packer, designdir_mp, dockdir_mp, packerdir_mp, ops_mp)
+
+        p = Pool(processes=int(nc))
+        p.map(func_packer, mpnn_list)
+
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
         os.system(f'cp ./{args.minimdir}/score_minim.txt ./first_score.txt')
         txt2csv (score='first_score.txt', csvname='first_score.csv', designdir=args.designdir)
@@ -734,7 +767,24 @@ if __name__ == '__main__':
         else:
             pass
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir='06_seq_design_files_2', dockdir=args.minimdir)
-        packer (designdir='06_seq_design_files_2', dockdir=args.minimdir, packerdir='07_packed_files_2', num_core=args.np, ops=args.ops)
+
+        mpnn_list = ls_for_packer (designdir='06_seq_design_files_2')
+        
+        if args.np == 'all':
+            nc = os.cpu_count() - 1
+        else:
+            nc = args.np
+        
+        designdir_mp='06_seq_design_files_2'
+        dockdir_mp=args.minimdir
+        packerdir_mp='07_packed_files_2'
+        ops_mp=args.ops
+
+        func_packer = partial(packer, designdir_mp, dockdir_mp, packerdir_mp, ops_mp)
+
+        p = Pool(processes=int(nc))
+        p.map(func_packer, mpnn_list)        
+
         minim_intana (packerdir='07_packed_files_2', minimdir='08_minimized_files_2', num_core=args.np, ops=args.ops)
         os.system(f'cp ./08_minimized_files_2/score_minim.txt ./final_score.txt')
         txt2csv (score='final_score.txt', csvname='final_score.csv', designdir='06_seq_design_files_2')
