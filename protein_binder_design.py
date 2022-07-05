@@ -294,6 +294,10 @@ def packer (designdir, dockdir, packerdir, ops, i):
 
     os.system(f'rm -rf {i_new}_resfile.txt')
 
+
+
+def packer_postproc (packerdir=args.packerdir):
+
     packed_files = os.listdir(packerdir)
     packed_list_path = [file for file in packed_files if file.endswith('.pdb')]
 
@@ -626,6 +630,7 @@ if __name__ == '__main__':
         p = Pool(processes=int(nc))
         p.map(func_packer, mpnn_list)   
 
+        packer_postproc (packerdir=args.packerdir)
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()        
     elif args.fn == 'minim_intana':
@@ -707,7 +712,8 @@ if __name__ == '__main__':
 
         p = Pool(processes=int(nc))
         p.map(func_packer, mpnn_list)   
-        
+
+        packer_postproc (packerdir=args.packerdir)
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
         os.system(f'cp ./{args.minimdir}/score_minim.txt ./final_score.txt')
         txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir)
@@ -759,6 +765,7 @@ if __name__ == '__main__':
         p = Pool(processes=int(nc))
         p.map(func_packer, mpnn_list)
 
+        packer_postproc (packerdir=args.packerdir)
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
         os.system(f'cp ./{args.minimdir}/score_minim.txt ./first_score.txt')
         txt2csv (score='first_score.txt', csvname='first_score.csv', designdir=args.designdir)
@@ -783,8 +790,9 @@ if __name__ == '__main__':
         func_packer = partial(packer, designdir_mp, dockdir_mp, packerdir_mp, ops_mp)
 
         p = Pool(processes=int(nc))
-        p.map(func_packer, mpnn_list)        
+        p.map(func_packer, mpnn_list)   
 
+        packer_postproc (packerdir='07_packed_files_2')
         minim_intana (packerdir='07_packed_files_2', minimdir='08_minimized_files_2', num_core=args.np, ops=args.ops)
         os.system(f'cp ./08_minimized_files_2/score_minim.txt ./final_score.txt')
         txt2csv (score='final_score.txt', csvname='final_score.csv', designdir='06_seq_design_files_2')
