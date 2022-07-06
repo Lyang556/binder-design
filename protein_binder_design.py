@@ -3,6 +3,7 @@
 # Script for designing protein binder
 # Miniproteins in this repository is originated from the supplementary data in Cao et al., (2022). Nature. 605, 551-560 
 
+# import modules
 import os
 import random
 import string
@@ -17,7 +18,6 @@ import pandas as pd
 import numpy as np
 
 parser = argparse.ArgumentParser (description='Script for designing protein binder')
-
 
 # basic
 parser.add_argument('--template', required=False, type=str, default='./templates/my.pdb', help='template file')
@@ -68,6 +68,7 @@ args = parser.parse_args()
 # -
 
 
+# Generate list file for docking
 def listgen (binderdir=args.binderdir, minilist=args.minilist):
 
     list_path = os.listdir(binderdir)
@@ -87,6 +88,7 @@ def listgen (binderdir=args.binderdir, minilist=args.minilist):
         miniprotein_list.write (f'{binderdir}/{i}' + '\n')
 
 
+# Create parameter files and shell commands for performing PatchDock
 def patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist):
 
     if paramdir in os.listdir('./'):
@@ -126,7 +128,7 @@ def patch_dock (template=args.template, minilist=args.minilist, paramdir=args.pa
 
             param.close()
 
-    # docking
+    # shell commands for docking to list
     cmd_ls = []
 
     for i in os.listdir(f'{paramdir}'):
@@ -136,11 +138,11 @@ def patch_dock (template=args.template, minilist=args.minilist, paramdir=args.pa
 
     return cmd_ls
 
-
+# Run the shell commands for docking through multiprocessing
 def mprun(i):
     os.system(i)
 
-
+# Convert docking result to pdb files
 def gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath, nstruct=args.nstruct):
 
     filels = os.listdir(paramdir)
@@ -163,7 +165,10 @@ def gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdo
     os.system(f'rm -rf {dockdir}/*.out')
 
 
+# ProteinMPNN seq. design
 def design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir):
+    
+    # shell script for ProteinMPNN
     shscript=f"""
 #!/bin/bash
 
@@ -215,15 +220,15 @@ python {mpnnpath}/vanilla_proteinmpnn/protein_mpnn_run.py \
     print ('-----------------------------')
     print ('ProteinMPNN running ...')
 
+    # ProteinMPNN running
     os.system(f'chmod +x ./{designdir}/mpnn.sh')
     os.system(f'conda run -n {mpnnconda} ./{designdir}/mpnn.sh {dockdir} ./{designdir}')
     os.system(f'rm -rf ./{designdir}/mpnn.sh')
 
-
-
     design_list = os.listdir(f'./{designdir}/seqs/')
     fasta_list = [file for file in design_list if file.endswith('.fa') ]
 
+    # ProteinMPNN result rearrange using DataFrame
     df1 = pd.DataFrame(columns=['description', 'score', 'recovery'])
 
     for i in fasta_list:
@@ -243,9 +248,11 @@ python {mpnnpath}/vanilla_proteinmpnn/protein_mpnn_run.py \
 
             # df1 = df1.append(pd.DataFrame([[i, score, recov]], columns=['name', 'score', 'recovery']), ignore_index=True)
 
+    # DataFrame to csv
     df1.to_csv(f'./{designdir}/seqs/design_result_merged.csv')
 
 
+# Generate list file for rosetta packer
 def ls_for_packer (designdir=args.designdir):
     
     designdir = designdir.replace('./', '').replace('/', '')
@@ -255,6 +262,7 @@ def ls_for_packer (designdir=args.designdir):
     return mpnn_list
 
 
+# Run rosetta packer through multiprocessing
 def packer (designdir, dockdir, packerdir, ops, i):
     
     designdir = designdir.replace('./', '').replace('/', '')
@@ -274,7 +282,7 @@ def packer (designdir, dockdir, packerdir, ops, i):
     else:
         os.mkdir(packerdir)
 
-
+    # Prep. resfile
     with open (f'./{designdir}/seqs/{i}', 'r') as fasta:
         seqs = fasta.readlines()[3].rstrip()
         seqs = list(seqs)
@@ -290,12 +298,12 @@ def packer (designdir, dockdir, packerdir, ops, i):
 
     j = i.replace ('.fa', '.pdb')
 
+    # Run command
     os.system(f'{fixbb} -in:file:s ./{dockdir}/{j} -in:file:fullatom -resfile {i_new}_resfile.txt -out:path:all {packerdir} -out:suffix _packer')
-
     os.system(f'rm -rf {i_new}_resfile.txt')
 
 
-
+# Generate list file for minimize
 def packer_postproc (packerdir=args.packerdir):
 
     packed_files = os.listdir(packerdir)
@@ -309,6 +317,7 @@ def packer_postproc (packerdir=args.packerdir):
     lsfile.close()
 
 
+# Run rosetta minimize and interface analyzer
 def minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops):
     xmlStr = f"""
 <ROSETTASCRIPTS>
@@ -366,6 +375,8 @@ def minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=arg
     else:
         rosetta_scripts = 'rosetta_scripts.mpi.linuxgccrelease'
 
+
+    # Run command
     if num_core == 'all':
         os.system(f'mpirun --use-hwthread-cpus {rosetta_scripts} -in:file:l ./{packerdir}/packer_pdb.list -out:path:all {minimdir} -out:suffix _minimize -parser:protocol ./{minimdir}/minimize.xml -out:file:scorefile score_minim.txt -corrections::beta_nov16 true')
 
@@ -375,7 +386,7 @@ def minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=arg
     os.system(f'rm -rf ./{minimdir}/minimize.xml')
 
 
-
+# Run DeepAccNet
 def dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda):
 
     list_path = os.listdir(f'./{minimdir}/')
@@ -409,6 +420,7 @@ def dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_c
     print ('-----------------------------')
     print ('DeepAccNet running ...')
     
+    # run command
     os.system(f'conda run -n {danconda} python3 {danpath}/DeepAccNet.py -r -v -pr --csv --process {num_core} {dandir} ./{dandir}/{resultname} > ./{dandir}/DAN_log.log')
 
     df = pd.read_csv(f'./{dandir}/{resultname}', delimiter=r'\s+')
@@ -421,7 +433,7 @@ def dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_c
     df.sort_values(by=['plddt'], ascending=False).reset_index(drop=True).to_csv(f'./{dandir}/{resultname_mod}')
     
 
-
+# Merge score files from rosetta and DeepAccNet
 def score_dan_merge (csvname=args.csvname, danresult=args.danresult):
 
     df1 = pd.read_csv(csvname)
@@ -435,10 +447,11 @@ def score_dan_merge (csvname=args.csvname, danresult=args.danresult):
 
     csvname = csvname.replace('.csv','_plddt.csv')
 
+    # sort values
     df_merge[df_merge.dSASA_int > 0].sort_values(by=['plddt'], ascending=False).reset_index(drop=True).to_csv(csvname)
 
 
-
+# Convert score file (score.sc) to csv file
 def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
     
     pd.read_csv(score, delimiter=r'\s+').to_csv(csvname)
@@ -449,32 +462,21 @@ def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
             for i, j in enumerate (ls):
                 if i == 0:
                     pass
+                    # remove first line that is an unnecessary thing
                 else:
                     newfile.writelines(j)
 
     df = pd.read_csv(csvname)
 
-    # desc_list = list(np.array(df['description'].tolist()))
-
-    # for i in desc_list:
-    #     newname = i[:-26]
-    #     df = df.replace({'description' : i}, newname)
-
-    # df = df[['description','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','sc_value','side1_normalized','side1_score','side2_normalized','side2_score']]
-    # df.to_csv('df_.csv')
-    # df.sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True).to_csv(csvname)
-
     try:
         designdir = designdir.replace('./', '').replace('/', '')
-
         df2 = pd.read_csv (f'./{designdir}/seqs/design_result_merged.csv')
-
         df_merge = pd.merge(df, df2, on='description')
-
         df_merge = df_merge[['description','score','recovery','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','sc_value','side1_normalized','side1_score','side2_normalized','side2_score']]
-
         df_merge[df_merge.dSASA_int > 0].sort_values(by=['score'], ascending=True).reset_index(drop=True).to_csv(csvname)
 
+    # Run the command when the 'design_result_merged.csv' that is originated from the result of ProteinMPNN 
+    # is not existed.
     except FileNotFoundError:
         df[df.dSASA_int > 0].sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True).to_csv(csvname)
 
@@ -485,25 +487,24 @@ def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, po
     if postsele == 'false':
         df = pd.read_csv(csvname).sort_values(by=[sorting], ascending=True)
     
+    # post-selection based on various criteria
     else:        
         df_orig = pd.read_csv(csvname)
-
         condition = (df_orig.plddt > 0.7) & (df_orig.dSASA_int > 900) & (df_orig.hbonds_int > 3)
         # condition = (df_orig.plddt > 0.7) & (df_orig.dSASA_int > 900) & (df_orig.hbonds_int > 3) & (df_orig.sc_value > 0.45)
-
         df = df_orig[condition].sort_values(by=['sc_value'], ascending=False).reset_index(drop=True)
-
         col_list = list(df.columns)
         col_list[0] = 'original_number'
         df.columns = col_list
 
-
+    # set the list of pdb files for copying.
     pdblist = df['description'].values.tolist()[0:200]
 
     csvname = csvname.replace('.csv', '').replace('./', '').replace('/', '')
     dist = dist.replace('./', '').replace('/', '')
     minimdir = minimdir.replace('./', '').replace('/', '')
 
+    # prepare directories
     if postsele == 'false':
         pdbpath = 'rank_' + minimdir
         pass
@@ -511,12 +512,10 @@ def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, po
         df.to_csv(f'{csvname}_selected.csv')
         pdbpath = 'Post_selected_rank_' + minimdir
 
-
     if dist in os.listdir('./'):
         pass
     else:
         os.mkdir(dist)
-
 
     if pdbpath in os.listdir(f'./{dist}'):
         pass
@@ -529,6 +528,7 @@ def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, po
         os.mkdir(f'./{dist}/{pdbpath}/fastas')
 
 
+    # copy
     for i, j in enumerate (pdblist):
         i += 1
         m = j[:-26]
@@ -536,6 +536,7 @@ def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, po
         os.system(f'cp ./{designdir}/seqs/{m}.fa ./{dist}/{pdbpath}/fastas/rank_{i}_in_{minimdir}_{m}.fa')
 
     
+# Run PRODIGY if the user want to use this (Not required)
 def prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.prodigyconda):
     print ('-----------------------------')
     print ('PRODIGY running ...')
@@ -581,11 +582,13 @@ if __name__ == '__main__':
     start = time.time ()
 
     if args.fn == '':
+        # default setting
         pass
     elif args.fn == 'listgen':
         listgen (binderdir=args.binderdir, minilist=args.minilist)
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()
+
     elif args.fn == 'patchdock':
         cmd_list = patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist)
 
@@ -603,16 +606,20 @@ if __name__ == '__main__':
 
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()
+
     elif args.fn == 'gen_pdb':
         gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath)
         print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()        
+        quit()    
+
     elif args.fn == 'design':
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
         print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()        
+        quit()   
+
     elif args.fn == 'packer':
 
+        # list of the result of ProteinMPNN to be passed to the multiprocessing pool
         mpnn_list = ls_for_packer (designdir=args.designdir)
         
         if args.np == 'all':
@@ -620,31 +627,38 @@ if __name__ == '__main__':
         else:
             nc = args.np
         
+        # set arguments
         designdir_mp=args.designdir
         dockdir_mp=args.dockdir
         packerdir_mp=args.packerdir
         ops_mp=args.ops
 
+        # Declare new function
         func_packer = partial(packer, designdir_mp, dockdir_mp, packerdir_mp, ops_mp)
 
+        # multiprocessing
         p = Pool(processes=int(nc))
-        p.map(func_packer, mpnn_list)   
+        p.map(func_packer, mpnn_list)
 
         packer_postproc (packerdir=args.packerdir)
         print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()        
+        quit()      
+
     elif args.fn == 'minim_intana':
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
         print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()        
+        quit()  
+
     elif args.fn == 'txt2csv':
         txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir)
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()
+
     elif args.fn == 'pdbsorting':
         pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dist=args.dist, postsele=args.postsele, sorting=args.sorting, designdir=args.designdir)
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()
+
     elif args.fn == 'prodigy':
         prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.prodigyconda)
         print ('Elapsed time: ', time.time() - start, 'sec')
@@ -658,6 +672,7 @@ if __name__ == '__main__':
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()  
     else:
+        # Print list of functions and required arguments.
         print ('Please select one of the functions below and enter it.')
         print (
         '''
@@ -677,8 +692,19 @@ if __name__ == '__main__':
         quit()
 
     
+    # autorun (one time iter / two time iter)
+
+    # one time iteraction
     if args.design_after_design == 'false':
+        # Running sequence
+        # Generate list for docking >> PatchDock >> Seq. design using ProteinMPNN 
+        # >> Rosetta packer and minimze >> DeepAccNet >> Result sorting
+
+
+        # Generate list for docking
         listgen (binderdir=args.binderdir, minilist=args.minilist)
+
+        # PatchDock
         cmd_list = patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist)
 
         paramdir=args.paramdir
@@ -694,8 +720,11 @@ if __name__ == '__main__':
         os.chdir('../')
 
         gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath, nstruct=args.nstruct)
+
+        # Seq. design using ProteinMPNN
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
         
+        # Rosetta packer
         mpnn_list = ls_for_packer (designdir=args.designdir)
         
         if args.np == 'all':
@@ -714,14 +743,24 @@ if __name__ == '__main__':
         p.map(func_packer, mpnn_list)   
 
         packer_postproc (packerdir=args.packerdir)
+
+        # Rosetta minimize
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
         os.system(f'cp ./{args.minimdir}/score_minim.txt ./final_score.txt')
+
+        # Create csv file containing the result
         txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir)
+
+        # Prodigy (not required)
         if args.prodigyrun == 'true':
             prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.prodigyconda)
         else:
             pass
+
+        # DeepAccNet
         dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
+
+        # Result sorting
         score_dan_merge (csvname=args.csvname, danresult=args.danresult)
         pdbsorting (csvname='final_score_plddt.csv', minimdir=args.minimdir, dist='06_results_pdb', postsele=args.postsele, sorting='plddt', designdir=args.designdir)
 
@@ -729,8 +768,20 @@ if __name__ == '__main__':
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()     
 
+
+    # two time iteraction
     elif args.design_after_design == 'true':
+        # Running sequence
+        # Generate list for docking >> PatchDock 
+        # >> Seq. design using ProteinMPNN >> Rosetta packer and minimze 
+        # >> Seq. design using ProteinMPNN >> Rosetta packer and minimize
+        # >> DeepAccNet >> Result sorting
+
+
+        # Generate list for docking
         listgen (binderdir=args.binderdir, minilist=args.minilist)
+
+        # PatchDock
         cmd_list = patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist)
 
         paramdir=args.paramdir
@@ -746,8 +797,11 @@ if __name__ == '__main__':
         os.chdir('../')
 
         gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath, nstruct=args.nstruct)
+
+        # Seq. design using ProteinMPNN
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
         
+        # Rosetta packer
         mpnn_list = ls_for_packer (designdir=args.designdir)
         
         if args.np == 'all':
@@ -766,15 +820,24 @@ if __name__ == '__main__':
         p.map(func_packer, mpnn_list)
 
         packer_postproc (packerdir=args.packerdir)
+
+        # Rosetta minimize
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
         os.system(f'cp ./{args.minimdir}/score_minim.txt ./first_score.txt')
+        
+        # Create csv file containing the result of first iteraction 
         txt2csv (score='first_score.txt', csvname='first_score.csv', designdir=args.designdir)
+
+        # Prodigy (not required)
         if args.prodigyrun == 'true':
             prodigy (minimdir=args.minimdir, csvname='first_score.csv', prodigyconda=args.prodigyconda)
         else:
             pass
+
+        # Seq. design using ProteinMPNN
         design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir='06_seq_design_files_2', dockdir=args.minimdir)
 
+        # Rosetta packer
         mpnn_list = ls_for_packer (designdir='06_seq_design_files_2')
         
         if args.np == 'all':
@@ -793,14 +856,22 @@ if __name__ == '__main__':
         p.map(func_packer, mpnn_list)   
 
         packer_postproc (packerdir='07_packed_files_2')
+
+        # Rosetta minimize
         minim_intana (packerdir='07_packed_files_2', minimdir='08_minimized_files_2', num_core=args.np, ops=args.ops)
         os.system(f'cp ./08_minimized_files_2/score_minim.txt ./final_score.txt')
+
+        # Create csv file containing the result of second iteraction  
         txt2csv (score='final_score.txt', csvname='final_score.csv', designdir='06_seq_design_files_2')
         if args.prodigyrun == 'true':
             prodigy (minimdir='08_minimized_files_2', csvname='final_score.csv', prodigyconda=args.prodigyconda)
         else:
             pass
+
+        # DeepAccNet
         dan (minimdir='08_minimized_files_2', dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
+
+        # Result sorting
         score_dan_merge (csvname='final_score.csv', danresult=args.danresult)
         pdbsorting (csvname='final_score_plddt.csv', minimdir='08_minimized_files_2', dist=args.dist, postsele=args.postsele, sorting='plddt', designdir='06_seq_design_files_2')
 
