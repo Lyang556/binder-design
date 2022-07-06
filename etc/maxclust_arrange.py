@@ -3,6 +3,8 @@
 import os
 import pandas as pd
 
+print ('-----------------------------')
+print ('maxcluster running ...')
 
 os.system('/opt/tools/maxcluster64bit -l li.list > log.log')
 
