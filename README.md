@@ -124,7 +124,7 @@ python3 prep_res_list.py --residues 10-12+20-22+186-193 --chain B
 
         template / 
             template.pdb
-            res.list
+            res_chain.list
 
         binders / 
             binder_1.pdb
