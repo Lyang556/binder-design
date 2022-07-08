@@ -85,7 +85,38 @@ You can find the library of miniproteins (binders) in the supplementary data of 
 
 <br>
 
-### 4. Working directory setting
+### 4. binding region preparation
+
+You have to create a file containing list of residue (first column) and chain ID (second column) as below.
+
+Since the chain of template PDB file was assigned as B, the second column have to be set as B.
+
+```
+10 B
+11 B
+12 B
+20 B
+21 B
+22 B
+186 B
+187 B
+188 B
+189 B
+190 B
+191 B
+192 B
+193 B
+```
+
+You can use the script in `prep_res_list.py` in `etc` directory to create a list file automatically.
+
+```
+python3 prep_res_list.py --residues 10-12+20-22+186-193 --chain B
+```
+
+<br>
+
+### 5. Working directory setting
 
 ```
 
@@ -93,6 +124,7 @@ You can find the library of miniproteins (binders) in the supplementary data of 
 
         template / 
             template.pdb
+            res.list
 
         binders / 
             binder_1.pdb
@@ -107,34 +139,35 @@ You can find the library of miniproteins (binders) in the supplementary data of 
 
 <br>
 
-### 4. run the script
+### 6. run the script
 
 *flags*
 
 ```
-usage: protein_binder_design_ver2.py [-h] [--template TEMPLATE]
-                                     [--binderdir BINDERDIR] [--np NP]
-                                     [--ops OPS] [--nstruct NSTRUCT]
-                                     [--minilist MINILIST] [--reslist RESLIST]
-                                     [--danpath DANPATH] [--mpnnpath MPNNPATH]
-                                     [--patchdockpath PATCHDOCKPATH]
-                                     [--prodigyconda PRODIGYCONDA]
-                                     [--danconda DANCONDA]
-                                     [--mpnnconda MPNNCONDA] [--inpdir INPDIR]
-                                     [--paramdir PARAMDIR] [--dockdir DOCKDIR]
-                                     [--designdir DESIGNDIR]
-                                     [--packerdir PACKERDIR]
-                                     [--minimdir MINIMDIR] [--dandir DANDIR]
-                                     [--danresult DANRESULT]
-                                     [--sorting SORTING]
-                                     [--design_after_design DESIGN_AFTER_DESIGN]
-                                     [--score SCORE] [--csvname CSVNAME]
-                                     [--dist DIST] [--prodigyrun PRODIGYRUN]
-                                     [--fn FN] [--postsele POSTSELE]
+usage: protein_binder_design.py [-h] [--template TEMPLATE]
+                                [--binderdir BINDERDIR] [--np NP] [--ops OPS]
+                                [--nstruct NSTRUCT] [--minilist MINILIST]
+                                [--reslist RESLIST] [--danpath DANPATH]
+                                [--mpnnpath MPNNPATH]
+                                [--patchdockpath PATCHDOCKPATH]
+                                [--prodigyconda PRODIGYCONDA]
+                                [--danconda DANCONDA] [--mpnnconda MPNNCONDA]
+                                [--paramdir PARAMDIR] [--dockdir DOCKDIR]
+                                [--designdir DESIGNDIR]
+                                [--packerdir PACKERDIR] [--minimdir MINIMDIR]
+                                [--dandir DANDIR] [--danresult DANRESULT]
+                                [--sorting SORTING]
+                                [--design_after_design DESIGN_AFTER_DESIGN]
+                                [--score SCORE] [--csvname CSVNAME]
+                                [--dst DST] [--prodigyrun PRODIGYRUN]
+                                [--fn FN] [--postsele POSTSELE]
+```
 
-Script for designing protein binder
+<br>
+<br>
 
-optional arguments:
+```
+options:
   -h, --help            show this help message and exit
   --template TEMPLATE   template file
   --binderdir BINDERDIR
@@ -153,15 +186,14 @@ optional arguments:
   --danconda DANCONDA   Name of conda env for DeepAccNet
   --mpnnconda MPNNCONDA
                         Name of conda env for ProteinMPNN
-  --inpdir INPDIR       saving path to prepared input files for docking
-  --paramdir PARAMDIR   saving path to prepared input files for docking
-  --dockdir DOCKDIR     saving path to docking files
+  --paramdir PARAMDIR   Path to prepared input files for docking
+  --dockdir DOCKDIR     Path to result files of docking
   --designdir DESIGNDIR
-                        saving path to designed sequences
+                        Path to fasta files of designed sequences
   --packerdir PACKERDIR
-                        saving path to packed PDB files
-  --minimdir MINIMDIR   saving path to minimized files
-  --dandir DANDIR       saving path to binder files for DeepAccNet
+                        Path to packed PDB files
+  --minimdir MINIMDIR   Path to minimized files
+  --dandir DANDIR       Path to binder files for DeepAccNet
   --danresult DANRESULT
                         Name of result csv file of DeepAccNet
   --sorting SORTING     Sort by ...
@@ -169,11 +201,11 @@ optional arguments:
                         Run design twice
   --score SCORE         Scorefile to be converted to csv format
   --csvname CSVNAME     Name of converted csv file
-  --dist DIST           directory to final results
+  --dst DST             Directory to final results
   --prodigyrun PRODIGYRUN
                         Run PRODIGY or not (true/false)
-  --fn FN               type a function name to use
-  --postsele POSTSELE
+  --fn FN               Type a function name to use
+  --postsele POSTSELE   Post-selection (after finished) (true/false)
 
 ```
 
@@ -184,12 +216,13 @@ optional arguments:
 python3 protein_binder_design.py \
     --binderdir ./binders/
     --template ./template/template.pdb
+    --reslist ./template/res.list
     --mpnnpath /opt/tools/ProteinMPNN/
     --patchdockpath /opt/tools/PatchDock/
     --danpath /opt/tools/DeepAccNet/
-    --np 8
-    --ops mac
-    --nstruct 2
+    --np all
+    --ops linux
+    --nstruct 1
 ```
 
 The script automatically run the `PatchDock`
@@ -219,7 +252,7 @@ python3 protein_binder_design.py --fn x
         packer (designdir, dockdir, packerdir, np, ops)
         minim_intana (packerdir, minimdir, np, ops)
         txt2csv (score, csvname, designdir)
-        pdbsorting (csvname, minimdir, dist, postsele, sorting, designdir)
+        pdbsorting (csvname, minimdir, dst, postsele, sorting, designdir)
         dan (minimdir, dandir, danpath, np, danconda)
         ((prodigy (minimdir, csvname, prodigyconda)))
         ((score_dan_merge (csvname, danresult)))
@@ -233,6 +266,5 @@ python3 protein_binder_design.py \
     --csvname ./final_score_csv.csv 
     --designdir ./03_seq_design_files/
 ```
-
 
 You can utilize it when you want to change docking protocol that you want (such as Rifdock / zdock ...).
