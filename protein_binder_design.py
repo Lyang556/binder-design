@@ -16,7 +16,7 @@ import time
 from multiprocessing import Pool
 from functools import partial
 
-# from pymol import cmd
+from pymol import cmd
 import pandas as pd
 import numpy as np
 
@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser (description='Script for designing protein bind
 parser.add_argument('--template', required=False, type=str, default='./templates/my.pdb', help='template file')
 parser.add_argument('--binderdir', required=False, type=str, default='./binders/', help='path to binders')
 parser.add_argument('--np', required=False, type=str, default='4', help='num cores')
-parser.add_argument('--ops', required=False, type=str, default='mac', help='mac or linux')
+parser.add_argument('--ops', required=False, type=str, default='linux', help='mac or linux')
 parser.add_argument('--nstruct', required=False, type=int, default=1, help='nstruct argument for PatchDock')
 
 # list
@@ -44,13 +44,12 @@ parser.add_argument('--danconda', required=False, type=str, default='dan', help=
 parser.add_argument('--mpnnconda', required=False, type=str, default='proteinmpnn', help='Name of conda env for ProteinMPNN')
 
 # dir
-parser.add_argument('--inpdir', required=False, type=str, default='./00_inputs', help='saving path to prepared input files for docking')
-parser.add_argument('--paramdir', required=False, type=str, default='./01_patchdock', help='saving path to prepared input files for docking')
-parser.add_argument('--dockdir', required=False, type=str, default='./02_docking_files', help='saving path to docking files')
-parser.add_argument('--designdir', required=False, type=str, default='./03_seq_design_files', help='saving path to designed sequences')
-parser.add_argument('--packerdir', required=False, type=str, default='./04_packed_files', help='saving path to packed PDB files')
-parser.add_argument('--minimdir', required=False, type=str, default='./05_minimized_files', help='saving path to minimized files')
-parser.add_argument('--dandir', required=False, type=str, default='./09_DAN', help='saving path to binder files for DeepAccNet')
+parser.add_argument('--paramdir', required=False, type=str, default='./01_patchdock', help='Path to prepared input files for docking')
+parser.add_argument('--dockdir', required=False, type=str, default='./02_docking_files', help='Path to result files of docking')
+parser.add_argument('--designdir', required=False, type=str, default='./03_seq_design_files', help='Path to fasta files of designed sequences')
+parser.add_argument('--packerdir', required=False, type=str, default='./04_packed_files', help='Path to packed PDB files')
+parser.add_argument('--minimdir', required=False, type=str, default='./05_minimized_files', help='Path to minimized files')
+parser.add_argument('--dandir', required=False, type=str, default='./09_DAN', help='Path to binder files for DeepAccNet')
 
 # etc
 parser.add_argument('--danresult', required=False, type=str, default='./09_DAN/DAN_results.csv', help='Name of result csv file of DeepAccNet')
@@ -58,12 +57,12 @@ parser.add_argument('--sorting', required=False, type=str, default='score', help
 parser.add_argument('--design_after_design', required=False, type=str, default='true', help='Run design twice')
 parser.add_argument('--score', required=False, type=str, default='./final_score.txt', help='Scorefile to be converted to csv format')
 parser.add_argument('--csvname', required=False, type=str, default='./final_score.csv', help='Name of converted csv file')
-parser.add_argument('--dst', required=False, type=str, default='./10_results_pdb', help='directory to final results')
+parser.add_argument('--dst', required=False, type=str, default='./10_results_pdb', help='Directory to final results')
 
 # additional fn
 parser.add_argument('--prodigyrun', required=False, type=str, default='false', help='Run PRODIGY or not (true/false)')
-parser.add_argument('--fn', required=False, type=str, default='', help='type a function name to use')
-parser.add_argument('--postsele', required=False, type=str, default='false', help='')
+parser.add_argument('--fn', required=False, type=str, default='', help='Type a function name to use')
+parser.add_argument('--postsele', required=False, type=str, default='true', help='Post-selection (after finished) (true/false)')
 
 
 args = parser.parse_args()
@@ -80,9 +79,12 @@ def listgen (binderdir=args.binderdir, minilist=args.minilist):
 
     minilist = os.path.abspath(minilist)
 
-    if minilist in os.listdir ('./'):
-        print(f'**-----Please remove the {minilist} file-----**')
-        exit()
+    if os.path.isfile(minilist):
+        print ('Pre-existed list file will be deleted, and new list file will be created')
+        time.sleep(5)
+        os.remove(minilist)
+    else:
+        pass
        
     miniprotein_list = open (f'{minilist}', 'a')
 
@@ -95,10 +97,10 @@ def patch_dock (template=args.template, minilist=args.minilist, paramdir=args.pa
 
     paramdir = os.path.abspath(paramdir)
 
-    if os.path.isdir(paramdir):
-        pass
-    else:
+    try:
         os.mkdir(paramdir)
+    except FileExistsError:
+        pass
 
     # param generate
     ls = open (minilist)
@@ -155,11 +157,11 @@ def gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdo
     filels = os.listdir(paramdir)
     out_ls = [file for file in filels if file.endswith('.out')]
 
-    
-    if os.path.exists(dockdir):
-        pass
-    else:
+    try:
         os.mkdir(dockdir)
+    except FileExistsError:
+        pass
+
 
     for i in out_ls:
         shutil.copyfile(f'{paramdir}/{i}', f'{dockdir}/{i}')
@@ -218,10 +220,10 @@ python {mpnnpath}/vanilla_proteinmpnn/protein_mpnn_run.py \
         --batch_size 1
 """
 
-    if os.path.isdir(designdir):
-        pass
-    else:
+    try:
         os.mkdir(designdir)
+    except FileExistsError:
+        pass
 
     mp = open(f'{designdir}/mpnn.sh', 'w')
     mp.write(shscript)
@@ -265,7 +267,8 @@ python {mpnnpath}/vanilla_proteinmpnn/protein_mpnn_run.py \
 def ls_for_packer (designdir=args.designdir):
     
     designdir = os.path.abspath(designdir)
-    mpnn_list = os.listdir(f'{designdir}/seqs/')
+    design_seq_dir = os.listdir(os.path.join(designdir, 'seqs'))
+    mpnn_list = [file for file in design_seq_dir if file.endswith('.fa')]
 
     return mpnn_list
 
@@ -284,10 +287,10 @@ def packer (designdir, dockdir, packerdir, ops, i):
     else:
         fixbb = 'fixbb.mpi.linuxgccrelease'
 
-    if os.path.isdir(packerdir):
-        pass
-    else:
+    try:
         os.mkdir(packerdir)
+    except FileExistsError:
+        pass
 
     # Prep. resfile
     with open (f'{designdir}/seqs/{i}', 'r') as fasta:
@@ -367,11 +370,10 @@ def minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=arg
 </ROSETTASCRIPTS>
 """
 
-
-    if os.path.isdir(minimdir):
-        pass
-    else:
+    try:
         os.mkdir(minimdir)
+    except FileExistsError:
+        pass
 
     f = open(f'{minimdir}/minimize.xml', 'w')
     f.write(xmlStr)
@@ -405,11 +407,10 @@ def dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_c
     list_path = os.listdir(f'{minimdir}')
     pdb_list = [file for file in list_path if file.endswith('.pdb')]
 
- 
-    if os.path.isdir(dandir):
-        pass
-    else:
+    try:
         os.mkdir(dandir)
+    except FileExistsError:
+        pass
 
       
     for i in pdb_list:
@@ -522,17 +523,16 @@ def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dst=args.dst, post
         pdbpath = os.path.join(dst, pdbpath)
 
     # set directories
-    if os.path.isdir(dst):
-        pass
-    else:
+
+    try:
         os.mkdir(dst)
-
-
-    if os.path.isdir(pdbpath):
+    except FileExistsError:
         pass
-    else:
-        os.mkdir(pdbpath)
 
+    try:
+        os.mkdir(pdbpath)
+    except FileExistsError:
+        pass
 
     if 'fastas' in os.listdir(pdbpath) and os.path.isdir(os.path.join(pdbpath, 'fastas')):
         pass
@@ -719,7 +719,7 @@ class runcommand:
 
         # Rosetta minimize
         minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
-        shutil.copyfile(f'{os.path.abspath(args.minimdir)}/score_minim.txt', f'{runpath}/final_score.txt')
+        shutil.copyfile(f'{os.path.abspath(args.minimdir)}/score_minim.txt', f'{runpath}/first_score.txt')
         
         # Create csv file containing the result of first iteraction 
         txt2csv (score='first_score.txt', csvname='first_score.csv', designdir=args.designdir)
@@ -754,9 +754,9 @@ class runcommand:
         packer_postproc (packerdir='07_packed_files_2')
 
         # Rosetta minimize
-        minimdir_new = '08_minimized_files_2'
-        minim_intana (packerdir='07_packed_files_2', minimdir='08_minimized_files_2', num_core=args.np, ops=args.ops)
-        shutil.copyfile('./08_minimized_file_2/score_minim.txt', f'{runpath}/final_score.txt')
+        minimdir_new = os.path.join(runpath, '08_minimized_files_2')
+        minim_intana (packerdir='07_packed_files_2', minimdir=minimdir_new, num_core=args.np, ops=args.ops)
+        shutil.copyfile(f'{minimdir_new}/score_minim.txt', f'{runpath}/final_score.txt')
 
         # Create csv file containing the result of second iteraction  
         txt2csv (score='final_score.txt', csvname='final_score.csv', designdir='06_seq_design_files_2')
@@ -826,6 +826,8 @@ class runcommand:
                 p.map(func_packer, mpnn_list)
 
                 packer_postproc (packerdir=args.packerdir)
+                print ('Elapsed time: ', time.time() - start, 'sec')
+                quit()
 
             else:
                 fn_ = fn_dict[args.fn]
