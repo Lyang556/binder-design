@@ -488,7 +488,6 @@ def txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir):
         df[df.dSASA_int > 0].sort_values(by=['dSASA_int'], ascending=False).reset_index(drop=True).to_csv(csvname)
 
 
-
 def pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dst=args.dst, postsele=args.postsele, sorting=args.sorting, designdir=args.designdir):
 
     if postsele == 'false':
@@ -777,8 +776,65 @@ class runcommand:
         print ('Elapsed time: ', time.time() - start, 'sec')
         quit()        
 
-    def fxns (self):
-        fxns = '''
+    def fxn_select (self):
+
+        start = time.time ()
+
+        fn_dict = {'listgen':listgen, 'patch_dock':patch_dock, 'gen_pdb':gen_pdb, 'packer':packer, 'minim_intana':minim_intana, 'txt2csv':txt2csv, 'pdbsorting':pdbsorting, 'dan':dan, 'prodigy':prodigy, 'score_dan_merge':score_dan_merge}
+
+        runpath = os.getcwd()
+
+        if args.fn in fn_dict:
+
+            if args.fn == 'patch_dock':
+
+                cmd_list = patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist)
+
+                paramdir=os.path.abspath(args.paramdir)
+                os.chdir(paramdir)
+
+                if args.np == 'all':
+                    nc = os.cpu_count() - 1
+                else:
+                    nc = args.np
+
+                p = Pool(processes=int(nc))
+                p.map(mprun, cmd_list)
+                os.chdir(runpath)
+                print ('Elapsed time: ', time.time() - start, 'sec')
+                quit()
+
+            elif args.fn == 'packer':
+                mpnn_list = ls_for_packer (designdir=os.path.abspath(args.designdir))
+                
+                if args.np == 'all':
+                    nc = os.cpu_count() - 1
+                else:
+                    nc = args.np
+                
+                # set arguments
+                designdir_mp=args.designdir
+                dockdir_mp=args.dockdir
+                packerdir_mp=args.packerdir
+                ops_mp=args.ops
+
+                # Declare new function
+                func_packer = partial(packer, designdir_mp, dockdir_mp, packerdir_mp, ops_mp)
+
+                # multiprocessing
+                p = Pool(processes=int(nc))
+                p.map(func_packer, mpnn_list)
+
+                packer_postproc (packerdir=args.packerdir)
+
+            else:
+                fn_ = fn_dict[args.fn]
+                fn_()
+                print ('Elapsed time: ', time.time() - start, 'sec')
+                quit()
+
+        else:
+            fxns = '''
         listgen (binderdir, minilist)
         patch_dock (template, minilist, paramdir, patchdockpath, reslist)
         gen_pdb(paramdir, dockdir, patchdockpath, nstruct)
@@ -791,8 +847,8 @@ class runcommand:
         ((prodigy (minimdir, csvname, prodigyconda)))
         ((score_dan_merge (csvname, danresult)))
         '''
-        return fxns
-
+            print ('Please select one of the functions below and enter it.')
+            print (fxns)
 
 
 
@@ -802,110 +858,13 @@ if __name__ == '__main__':
 
     run_script = runcommand
 
-    if args.fn == '':
-        # default setting
-        pass
-    elif args.fn == 'listgen':
-        listgen (binderdir=args.binderdir, minilist=args.minilist)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()
+    if not args.fn == '':
+        run_script.fxn_select (args)
 
-    elif args.fn == 'patchdock':
-        cmd_list = patch_dock (template=args.template, minilist=args.minilist, paramdir=args.paramdir, patchdock=args.patchdockpath, reslist=args.reslist)
-
-        paramdir=args.paramdir
-        os.chdir(paramdir)
-
-        if args.np == 'all':
-            nc = os.cpu_count() - 1
-        else:
-            nc = args.np
-
-        p = Pool(processes=int(nc))
-        rls = p.map(mprun, cmd_list)
-        os.chdir('../')
-
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()
-
-    elif args.fn == 'gen_pdb':
-        gen_pdb(paramdir=args.paramdir, dockdir=args.dockdir, patchdock=args.patchdockpath)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()    
-
-    elif args.fn == 'design':
-        design (mpnnpath=args.mpnnpath, mpnnconda=args.mpnnconda, designdir=args.designdir, dockdir=args.dockdir)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()   
-
-    elif args.fn == 'packer':
-
-        # list of the result of ProteinMPNN to be passed to the multiprocessing pool
-        mpnn_list = ls_for_packer (designdir=args.designdir)
-        
-        if args.np == 'all':
-            nc = os.cpu_count() - 1
-        else:
-            nc = args.np
-        
-        # set arguments
-        designdir_mp=args.designdir
-        dockdir_mp=args.dockdir
-        packerdir_mp=args.packerdir
-        ops_mp=args.ops
-
-        # Declare new function
-        func_packer = partial(packer, designdir_mp, dockdir_mp, packerdir_mp, ops_mp)
-
-        # multiprocessing
-        p = Pool(processes=int(nc))
-        p.map(func_packer, mpnn_list)
-
-        packer_postproc (packerdir=args.packerdir)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()      
-
-    elif args.fn == 'minim_intana':
-        minim_intana (packerdir=args.packerdir, minimdir=args.minimdir, num_core=args.np, ops=args.ops)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()  
-
-    elif args.fn == 'txt2csv':
-        txt2csv (score=args.score, csvname=args.csvname, designdir=args.designdir)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()
-
-    elif args.fn == 'pdbsorting':
-        pdbsorting (csvname=args.csvname, minimdir=args.minimdir, dst=args.dst, postsele=args.postsele, sorting=args.sorting, designdir=args.designdir)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()
-
-    elif args.fn == 'prodigy':
-        prodigy (minimdir=args.minimdir, csvname=args.csvname, prodigyconda=args.prodigyconda)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()        
-    elif args.fn == 'dan':
-        dan (minimdir=args.minimdir, dandir=args.dandir, danpath=args.danpath, num_core=args.np, danconda=args.danconda)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()  
-    elif args.fn == 'score_dan_merge':
-        score_dan_merge (csvname=args.csvname, danresult=args.danresult)
-        print ('Elapsed time: ', time.time() - start, 'sec')
-        quit()  
     else:
-        # Print list of functions and required arguments.
-        print ('Please select one of the functions below and enter it.')
-
-        print (run_script.fxns(args))
-        
-        quit()
-
-       
-    # autorun (one time iter / two time iter)
-
-    if args.design_after_design == 'false':
-        run_script.one_time (args)
-    elif args.design_after_design == 'true':
-        run_script.two_times (args)
-    else: 
-        print ('Please specify the design_after_design argument as true/false')
+        if args.design_after_design == 'false':
+            run_script.one_time (args)
+        elif args.design_after_design == 'true':
+            run_script.two_times (args)
+        else: 
+            print ('Please specify the design_after_design argument as true/false')
