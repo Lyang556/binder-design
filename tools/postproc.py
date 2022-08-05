@@ -85,7 +85,8 @@ class PostProc:
             shutil.copyfile(f'{minimdir}/{j}.pdb', f'{pdbpath}/rank_{i}_in_{minimdir_name}_{j}.pdb')
 
         # copy fasta files
-        for i in fa_ls:
+        for m in fa_ls:
+            i += 1
             try:
                 shutil.copyfile(f'{designdir}/seqs/{m}.fa', f'{pdbpath}/fastas/rank_{i}_in_{minimdir_name}_{m}.fa')
             except FileNotFoundError:
