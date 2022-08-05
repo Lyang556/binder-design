@@ -9,10 +9,18 @@ Required
 
     Rosetta
     PatchDock
-    Conda
-        - PyTorch
-        - Numpy
-        - Pandas
+
+    Conda env
+        * name: binderdesign
+            - Numpy
+            - Pandas
+            - PyMOL
+
+        * name: ProteinMPNN
+            - ProteinMPNN
+
+        * name: dan
+            - DeepAccNet
 ```
 
 - - -
@@ -24,22 +32,22 @@ Required
 
 ### 1. Env setup
 
-#### conda envs - dependencies
+#### conda envs
 
 ```
-Python>=3.0
-PyTorch
-Numpy
-Pandas
+conda create -n binderdesign python=3.7.0
+conda install -c anaconda numpy pandas
+conda install -c schrodinger pymol
 ```
 
-<br>
-
-for ProteinMPNN, please find the related github page.
+for ProteinMPNN and DeepAccNet (dan), please find the related github page.
 
 *[ProteinMPNN](https://github.com/dauparas/ProteinMPNN)*
 <br>
 
+*[DeepAccNet](https://github.com/hiranumn/DeepAccNet)*
+
+<br>
 
 #### ProteinMPNN
 
@@ -114,8 +122,6 @@ python3 prep_res_list.py --residues 10-12+20-22+186-193 --chain B
 
     Working_dir / 
 
-        tools /
-
         template / 
             template.pdb
             res_chain.list
@@ -126,7 +132,7 @@ python3 prep_res_list.py --residues 10-12+20-22+186-193 --chain B
             binder_3.pdb
             ...
 
-        binder_design.py
+        protein_binder_design.py
 
 
 ```
@@ -138,11 +144,23 @@ python3 prep_res_list.py --residues 10-12+20-22+186-193 --chain B
 *flags*
 
 ```
-usage: binder_design.py [-h] [--patchdock PATCHDOCK] [--nstruct NSTRUCT] [--template TEMPLATE]
-                        [--binderlist BINDERLIST] [--reslist RESLIST] [--binderdir BINDERDIR]
-                        [--dockdir DOCKDIR] [--designdir DESIGNDIR] [--packerdir PACKERDIR]
-                        [--minimdir MINIMDIR] [--dst DST] [--np NP] [--ops OPS]
-                        [--csvname CSVNAME] [--score SCORE] [--fn FN]
+usage: protein_binder_design.py [-h] [--template TEMPLATE]
+                                [--binderdir BINDERDIR] [--np NP] [--ops OPS]
+                                [--nstruct NSTRUCT] [--minilist MINILIST]
+                                [--reslist RESLIST] [--danpath DANPATH]
+                                [--mpnnpath MPNNPATH]
+                                [--patchdockpath PATCHDOCKPATH]
+                                [--prodigyconda PRODIGYCONDA]
+                                [--danconda DANCONDA] [--mpnnconda MPNNCONDA]
+                                [--paramdir PARAMDIR] [--dockdir DOCKDIR]
+                                [--designdir DESIGNDIR]
+                                [--packerdir PACKERDIR] [--minimdir MINIMDIR]
+                                [--dandir DANDIR] [--danresult DANRESULT]
+                                [--sorting SORTING]
+                                [--design_after_design DESIGN_AFTER_DESIGN]
+                                [--score SCORE] [--csvname CSVNAME]
+                                [--dst DST] [--prodigyrun PRODIGYRUN]
+                                [--fn FN] [--postsele POSTSELE]
 ```
 
 <br>
@@ -151,47 +169,58 @@ usage: binder_design.py [-h] [--patchdock PATCHDOCK] [--nstruct NSTRUCT] [--temp
 ```
 options:
   -h, --help            show this help message and exit
-  --patchdock PATCHDOCK
-                        path to PatchDock
-  --nstruct NSTRUCT     nstruct argument for PatchDock
-  --template TEMPLATE, -t TEMPLATE
-                        template file
-  --binderlist BINDERLIST, -l BINDERLIST
-                        list of binders for docking
-  --reslist RESLIST, -resl RESLIST
-                        list of residue in receptor for PatchDock
-  --binderdir BINDERDIR, -bd BINDERDIR
+  --template TEMPLATE   template file
+  --binderdir BINDERDIR
                         path to binders
-  --dockdir DOCKDIR, -dd DOCKDIR
-                        Path to prepared input files for docking
-  --designdir DESIGNDIR, -ded DESIGNDIR
-                        Path to fasta files of designed sequences
-  --packerdir PACKERDIR, -pd PACKERDIR
-                        Path to packed PDB files
-  --minimdir MINIMDIR, -md MINIMDIR
-                        Path to minimized files
-  --dst DST             Directory to final results
   --np NP               num cores
   --ops OPS             mac or linux
-  --csvname CSVNAME     Name of converted csv file
+  --nstruct NSTRUCT     nstruct argument for PatchDock
+  --minilist MINILIST   list file
+  --reslist RESLIST     residue list file for PatchDock
+  --danpath DANPATH     Path to DeepAccNet
+  --mpnnpath MPNNPATH   path to ProteinMPNN
+  --patchdockpath PATCHDOCKPATH
+                        path to PatchDock
+  --prodigyconda PRODIGYCONDA
+                        Name of conda env for PRODIGY
+  --danconda DANCONDA   Name of conda env for DeepAccNet
+  --mpnnconda MPNNCONDA
+                        Name of conda env for ProteinMPNN
+  --paramdir PARAMDIR   Path to prepared input files for docking
+  --dockdir DOCKDIR     Path to result files of docking
+  --designdir DESIGNDIR
+                        Path to fasta files of designed sequences
+  --packerdir PACKERDIR
+                        Path to packed PDB files
+  --minimdir MINIMDIR   Path to minimized files
+  --dandir DANDIR       Path to binder files for DeepAccNet
+  --danresult DANRESULT
+                        Name of result csv file of DeepAccNet
+  --sorting SORTING     Sort by ...
+  --design_after_design DESIGN_AFTER_DESIGN
+                        Run design twice
   --score SCORE         Scorefile to be converted to csv format
-  --fn FN               A function name to use
+  --csvname CSVNAME     Name of converted csv file
+  --dst DST             Directory to final results
+  --prodigyrun PRODIGYRUN
+                        Run PRODIGY or not (true/false)
+  --fn FN               Type a function name to use
+  --postsele POSTSELE   Post-selection (after finished) (true/false)
+
 ```
 
 <br>
 <br>
 
-If you want to run automatically, there is no need to specify all of the directories.
-
-Mostly, directories were specified as default values.
-
 ```
-python3 binder_design.py \
-    --template ./template/template.pdb
+python3 protein_binder_design.py \
     --binderdir ./binders/
-    --reslist ./template/res_chain.list
-    --patchdock /opt/tools/PatchDock/
-    --np 4
+    --template ./template/template.pdb
+    --reslist ./template/res.list
+    --mpnnpath /opt/tools/ProteinMPNN/
+    --patchdockpath /opt/tools/PatchDock/
+    --danpath /opt/tools/DeepAccNet/
+    --np all
     --ops linux
     --nstruct 1
 ```
@@ -202,21 +231,6 @@ and `seq. design` > `rosetta packing` > `rosetta minimize` will be then repeated
 
 You can find 10 new folders in your working directory, and several csv files containing scores.
 
-When running, You will see the message below.
-
-```
-*** 1st run ***
-[PatchDock] Docking ...
-[PatchDock] PDB generating ...
-[ProteinMPNN] Seq. design running ...
-[Rosetta] Packer running ...
-[Rosetta] Minimize running ...
-*** 2nd run ***
-[ProteinMPNN] Seq. design running ...
-[Rosetta] Packer running ...
-[Rosetta] Minimize running ...
-Total elapsed time:  113.91192865371704 sec
-```
 
 <br>
 
@@ -229,26 +243,28 @@ try to use `--fn` flag.
 ```
 # check the function list and require arguments
 
-python3 binder_design.py --fn x
+python3 protein_binder_design.py --fn x
 
-    Please select/enter the one of functions below and enter it.
+        listgen (binderdir, minilist)
+        patch_dock (template, minilist, paramdir, patchdockpath, reslist)
+        gen_pdb(paramdir, dockdir, patchdockpath, nstruct)
+        design (mpnnpath, mpnnconda, designdir, dockdir)
+        packer (designdir, dockdir, packerdir, np, ops)
+        minim_intana (packerdir, minimdir, np, ops)
+        txt2csv (score, csvname, designdir)
+        pdbsorting (csvname, minimdir, dst, postsele, sorting, designdir)
+        dan (minimdir, dandir, danpath, np, danconda)
+        ((prodigy (minimdir, csvname, prodigyconda)))
+        ((score_dan_merge (csvname, danresult)))
 
-    1) listgen (binderdir, minilist)
-    2) patchdock (patchdock, template, reslist, minilist, dockdir, np)
-    3) seq_design (dockdir, designdir)
-    4) packer (ops, designdir, dockdir, packerdir, np)
-    5) minimize (ops, packerdir, minimdir, np)
-    6) txt2csv (score, csvname)
-    7) pdbsorting (csvname, minimdir, designdir, dst)
 
-```
-
-
-```
 # example
 
-python3 binder_design.py \
+python3 protein_binder_design.py \
     --fn txt2csv 
     --score ./final_score.txt 
     --csvname ./final_score_csv.csv 
+    --designdir ./03_seq_design_files/
 ```
+
+You can utilize it when you want to change docking protocol that you want (such as Rifdock / zdock ...).
