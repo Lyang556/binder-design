@@ -168,3 +168,4 @@ if __name__ == "__main__":
 
   p = Pool(processes=int(nc))
   p.map(abc, biounit_names)
+  p.close()
