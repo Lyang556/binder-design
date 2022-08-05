@@ -30,7 +30,7 @@ class PostProc:
 
         df = pd.read_csv(csvname)
 
-        df = df[['description','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','total_score','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','sc_value','side1_normalized','side1_score','side2_normalized','side2_score']]
+        df = df[['description','dSASA_int','dSASA_hphobic','dSASA_polar','hbonds_int','total_score','sc_value','complex_normalized','dG_cross','dG_cross/dSASAx100','dG_separated','dG_separated/dSASAx100','delta_unsatHbonds','dslf_fa13','fa_atr','fa_dun_dev','fa_dun_rot','fa_dun_semi','fa_elec','fa_intra_atr_xover4','fa_intra_elec','fa_intra_rep_xover4','fa_intra_sol_xover4','fa_rep','fa_sol','hbond_E_fraction','hbond_bb_sc','hbond_lr_bb','hbond_sc','hbond_sr_bb','hxl_tors','lk_ball','lk_ball_bridge','lk_ball_bridge_uncpl','lk_ball_iso','nres_all','nres_int','omega','p_aa_pp','packstat','per_residue_energy_int','pro_close','rama_prepro','ref','side1_normalized','side1_score','side2_normalized','side2_score']]
         df[df.dSASA_int > 0].reset_index(drop=True).to_csv(csvname)
 
 
@@ -43,7 +43,7 @@ class PostProc:
         df_orig = pd.read_csv(csvname)
         condition = (df_orig.sc_value > 0.4) & (df_orig.dSASA_int > 900) & (df_orig.hbonds_int > 3)
 
-        df = df_orig[condition].sort_values(by=['sc_value'], ascending=False).reset_index(drop=True)
+        df = df_orig[condition].sort_values(by=['dG_separated'], ascending=True).reset_index(drop=True)
         col_list = list(df.columns)
         col_list[0] = 'original_number'
         df.columns = col_list
@@ -74,7 +74,7 @@ class PostProc:
         else:
             os.mkdir(f'{pdbpath}/fastas')
 
-        df.to_csv(f'{dst}/final_score.csv')
+        df.loc[0:200, :].to_csv(f'{dst}/final_score_top200.csv')
 
         # copy pdb files
         fa_ls = []
@@ -85,6 +85,7 @@ class PostProc:
             shutil.copyfile(f'{minimdir}/{j}.pdb', f'{pdbpath}/rank_{i}_in_{minimdir_name}_{j}.pdb')
 
         # copy fasta files
+        i = 0
         for m in fa_ls:
             i += 1
             try:
