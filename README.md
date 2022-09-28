@@ -47,7 +47,7 @@ for ProteinMPNN, please find the related github page.
 git clone https://github.com/dauparas/ProteinMPNN
 ```
 
-and then move the ProteinMPNN directory to somewhere (eg. /opt/tools/ProteinMPNN/)
+The modified version of ProteinMPNN is already included in this repository (tools directory).
 
 <br>
 
