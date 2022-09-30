@@ -4,7 +4,7 @@ import argparse
 
 parser = argparse.ArgumentParser (description='Script for designing protein binder')
 
-parser.add_argument('--residues', required=True, type=str, default='1-10', help='path to binders')
+parser.add_argument('--residues', required=True, type=str, default='1-10', help='path to binders (eg. 1-10 20 25-60)')
 parser.add_argument('--chain', required=False, type=str, default='', help='path to binders')
 
 args = parser.parse_args()
@@ -13,7 +13,7 @@ args = parser.parse_args()
 
 residues = args.residues
 
-ls = residues.split('+')
+ls = residues.split(' ')
 
 for i in ls:
     i = i.split('-')
