@@ -1,3 +1,9 @@
+# Please use the RFdiffusion that is much better than this.
+
+<br>
+<br>
+<br>
+
 # Protein binder design 
 
 Script to design protein binder using Rosetta and ProteinMPNN.
