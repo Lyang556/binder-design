@@ -1,6 +1,9 @@
 # Please use the RFdiffusion that is much better than this.
 
 <br>
+
+`RFdiffusion` https://github.com/RosettaCommons/RFdiffusion
+
 <br>
 <br>
 
